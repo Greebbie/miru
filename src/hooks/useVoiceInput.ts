@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
+import { useConfigStore } from '@/stores/configStore'
 
 interface SpeechRecognitionEvent {
   results: { [index: number]: { [index: number]: { transcript: string } }; length: number }
@@ -29,7 +30,8 @@ export function useVoiceInput(onResult: (text: string) => void) {
     if (!window.webkitSpeechRecognition) return
 
     const recognition = new window.webkitSpeechRecognition()
-    recognition.lang = 'zh-CN'
+    const lang = useConfigStore.getState().language
+    recognition.lang = lang === 'en' ? 'en-US' : 'zh-CN'
     recognition.interimResults = false
     recognition.continuous = false
 

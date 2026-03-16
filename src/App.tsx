@@ -12,6 +12,7 @@ import SettingsPanel from '@/components/Settings/SettingsPanel'
 import CommandPalette from '@/components/CommandPalette/CommandPalette'
 import ContextMenu from '@/components/ContextMenu/ContextMenu'
 import AdminPanel from '@/components/Admin/AdminPanel'
+import { useMonitor } from '@/hooks/useMonitor'
 
 // Register skills once on module load
 registerBuiltinSkills()
@@ -28,6 +29,9 @@ export default function App() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [showHint, setShowHint] = useState(() => !localStorage.getItem(HINT_STORAGE_KEY))
 
+  // Activate monitor system
+  useMonitor()
+
   // Initialize persistent stores on mount
   useEffect(() => {
     useConfigStore.getState().init()
@@ -36,9 +40,9 @@ export default function App() {
     memoryStore.init()
   }, [])
 
-  // Disable click-through entirely
+  // Enable click-through on transparent pixels, forward events for hit-testing
   useEffect(() => {
-    window.electronAPI?.setIgnoreCursorEvents(false)
+    window.electronAPI?.setIgnoreCursorEvents(true, { forward: true })
   }, [])
 
   // Listen for command palette IPC from main process
@@ -165,7 +169,7 @@ export default function App() {
             transition={{ duration: 0.3 }}
             className="text-white/40 text-[10px] mt-1 select-none"
           >
-            左键聊天 · 右键菜单
+            左键聊天 · 右键菜单 · / 查看命令
           </motion.p>
         )}
       </AnimatePresence>

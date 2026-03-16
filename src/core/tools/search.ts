@@ -13,6 +13,9 @@ toolRegistry.register({
   riskLevel: 'low',
   category: 'search',
   execute: async (params) => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     const query = String(params.query || '')
     if (!query) {
       return { success: false, data: null, summary: 'No query provided' }

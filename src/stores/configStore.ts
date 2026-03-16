@@ -14,6 +14,7 @@ interface ConfigData {
   language: 'zh' | 'en' | 'auto'
   soundEnabled: boolean
   visionEnabled: boolean
+  ttsEnabled: boolean
   isOnboarded: boolean
 }
 
@@ -30,6 +31,7 @@ interface ConfigState extends ConfigData {
   setLanguage: (lang: 'zh' | 'en' | 'auto') => void
   setSoundEnabled: (enabled: boolean) => void
   setVisionEnabled: (enabled: boolean) => void
+  setTtsEnabled: (enabled: boolean) => void
   setOnboarded: (onboarded: boolean) => void
   updateConfig: (partial: Partial<ConfigState>) => void
 }
@@ -47,6 +49,7 @@ function extractData(state: ConfigState): ConfigData {
     language: state.language,
     soundEnabled: state.soundEnabled,
     visionEnabled: state.visionEnabled,
+    ttsEnabled: state.ttsEnabled,
     isOnboarded: state.isOnboarded,
   }
 }
@@ -65,9 +68,10 @@ export const useConfigStore = create<ConfigState>((set) => ({
   verbosity: 0.3,
   formality: 0.7,
   proactivity: 0.3,
-  language: 'auto',
+  language: 'zh',
   soundEnabled: false,
   visionEnabled: false,
+  ttsEnabled: false,
   isOnboarded: false,
   isLoading: true,
 
@@ -93,6 +97,7 @@ export const useConfigStore = create<ConfigState>((set) => ({
   setLanguage: (language) => { set({ language }); persistConfig() },
   setSoundEnabled: (soundEnabled) => { set({ soundEnabled }); persistConfig() },
   setVisionEnabled: (visionEnabled) => { set({ visionEnabled }); persistConfig() },
+  setTtsEnabled: (ttsEnabled) => { set({ ttsEnabled }); persistConfig() },
   setOnboarded: (isOnboarded) => { set({ isOnboarded }); persistConfig() },
   updateConfig: (partial) => { set(partial); persistConfig() },
 }))

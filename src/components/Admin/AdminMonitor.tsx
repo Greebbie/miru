@@ -7,8 +7,6 @@ type ActionType = MonitorRule['action']['type']
 const TRIGGER_TYPES: { id: TriggerType; label: string }[] = [
   { id: 'app_focus', label: 'App Focus' },
   { id: 'window_title', label: 'Window Title' },
-  { id: 'schedule', label: 'Schedule' },
-  { id: 'file_change', label: 'File Change' },
 ]
 
 const ACTION_TYPES: { id: ActionType; label: string }[] = [
@@ -61,18 +59,6 @@ const PRESETS: { label: string; form: FormState }[] = [
       actionType: 'notify',
       payload: 'Discord activity detected',
       cooldownMs: 60000,
-    },
-  },
-  {
-    label: '定时任务',
-    form: {
-      name: '定时提醒',
-      triggerType: 'schedule',
-      pattern: '*/30 * * * *',
-      app: '',
-      actionType: 'notify',
-      payload: '定时提醒：该休息了！',
-      cooldownMs: 1800000,
     },
   },
 ]

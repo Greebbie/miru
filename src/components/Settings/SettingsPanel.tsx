@@ -207,6 +207,21 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                   />
                 </button>
               </div>
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-white/60 text-xs">语音朗读 (TTS)</span>
+                <button
+                  onClick={() => config.setTtsEnabled(!config.ttsEnabled)}
+                  className={`w-10 h-5 rounded-full transition-colors ${
+                    config.ttsEnabled ? 'bg-blue-500' : 'bg-white/20'
+                  }`}
+                >
+                  <div
+                    className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                      config.ttsEnabled ? 'translate-x-5' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
             </TabContent>
           )}
         </AnimatePresence>

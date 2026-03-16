@@ -13,6 +13,9 @@ toolRegistry.register({
   riskLevel: 'low',
   category: 'apps',
   execute: async (params) => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     try {
       const appName = params.name as string
       await window.electronAPI.openApp(appName)

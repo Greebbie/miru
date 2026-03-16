@@ -13,6 +13,9 @@ toolRegistry.register({
   riskLevel: 'low',
   category: 'files',
   execute: async (params) => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     try {
       const files = await window.electronAPI.listFiles(params.path as string)
       const dirs = files.filter((f) => f.isDir).length
@@ -41,6 +44,9 @@ toolRegistry.register({
   riskLevel: 'low',
   category: 'files',
   execute: async (params) => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     try {
       const content = await window.electronAPI.readFile(params.path as string)
       const lines = content.split('\n').length
@@ -68,6 +74,9 @@ toolRegistry.register({
   riskLevel: 'low',
   category: 'files',
   execute: async (params) => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     try {
       await window.electronAPI.createDirectory(params.path as string)
       return { success: true, data: null, summary: 'Directory created' }
@@ -91,6 +100,9 @@ toolRegistry.register({
   riskLevel: 'medium',
   category: 'files',
   execute: async (params) => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     try {
       await window.electronAPI.moveFiles(params.from as string, params.to as string)
       return { success: true, data: null, summary: `Moved to ${params.to}` }
@@ -113,6 +125,9 @@ toolRegistry.register({
   riskLevel: 'high',
   category: 'files',
   execute: async (params) => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     try {
       await window.electronAPI.deleteFiles(params.path as string)
       return { success: true, data: null, summary: 'Deleted' }
@@ -136,6 +151,9 @@ toolRegistry.register({
   riskLevel: 'medium',
   category: 'files',
   execute: async (params) => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     try {
       await window.electronAPI.writeFile(params.path as string, params.content as string)
       return { success: true, data: null, summary: `Written to ${params.path}` }
@@ -159,6 +177,9 @@ toolRegistry.register({
   riskLevel: 'medium',
   category: 'files',
   execute: async (params) => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     try {
       await window.electronAPI.copyFiles(params.from as string, params.to as string)
       return { success: true, data: null, summary: `Copied to ${params.to}` }
@@ -182,6 +203,9 @@ toolRegistry.register({
   riskLevel: 'low',
   category: 'files',
   execute: async (params) => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     try {
       const results = await window.electronAPI.searchFiles(params.path as string, params.pattern as string)
       return {

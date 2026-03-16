@@ -126,6 +126,10 @@ ipcMain.handle('set-window-size', (_event, width: number, height: number) => {
   mainWindow?.setSize(Math.round(width), Math.round(height))
 })
 
+ipcMain.handle('minimize-window', () => {
+  mainWindow?.minimize()
+})
+
 // ---- Tool IPC: Files ----
 
 function normalizePath(p: string): string {
@@ -541,8 +545,12 @@ function createTray() {
 
   tray.setContextMenu(contextMenu)
   tray.on('click', () => {
-    mainWindow?.show()
-    mainWindow?.focus()
+    if (mainWindow?.isVisible()) {
+      mainWindow.hide()
+    } else {
+      mainWindow?.show()
+      mainWindow?.focus()
+    }
   })
 }
 
@@ -573,6 +581,10 @@ app.whenReady().then(() => {
     mainWindow?.show()
     mainWindow?.focus()
     mainWindow?.webContents.send('toggle-command-palette')
+  })
+
+  globalShortcut.register('Alt+M', () => {
+    mainWindow?.webContents.send('toggle-voice')
   })
 })
 

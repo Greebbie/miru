@@ -41,6 +41,9 @@ export interface ElectronAPI {
   // Window resize
   setWindowSize: (width: number, height: number) => Promise<void>
 
+  // Minimize (hide to tray)
+  minimizeWindow: () => Promise<void>
+
   // Web search
   webSearch: (query: string) => Promise<{
     abstract: string
@@ -58,6 +61,7 @@ export interface ElectronAPI {
 
   // IPC event listeners
   onToggleCommandPalette: (callback: () => void) => void
+  onToggleVoice: (callback: () => void) => void
 
   // Persistent store IPC
   storeGet: (key: string) => Promise<unknown>
@@ -68,6 +72,7 @@ export interface ElectronAPI {
   monitorStart: (intervalMs?: number) => Promise<void>
   monitorStop: () => Promise<void>
   onWindowChanged: (callback: (data: { app: string; title: string }) => void) => void
+  offWindowChanged: () => void
 
   // Automation
   sendKeys: (keys: string) => Promise<void>

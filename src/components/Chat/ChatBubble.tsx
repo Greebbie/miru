@@ -1,8 +1,10 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { useChatStore } from '@/stores/chatStore'
 import { useConfigStore } from '@/stores/configStore'
+import { useMonitorStatus } from '@/hooks/useMonitor'
 import MessageList from './MessageList'
 import InputBar from './InputBar'
+import CostBadge from './CostBadge'
 
 interface ChatBubbleProps {
   onOpenSettings: () => void
@@ -12,6 +14,7 @@ interface ChatBubbleProps {
 export default function ChatBubble({ onOpenSettings, onOpenAdmin }: ChatBubbleProps) {
   const { isChatOpen, pendingConfirm, closeChat } = useChatStore()
   const { visionEnabled, setVisionEnabled } = useConfigStore()
+  const hasActiveRules = useMonitorStatus()
 
   return (
     <AnimatePresence>
@@ -31,14 +34,18 @@ export default function ChatBubble({ onOpenSettings, onOpenAdmin }: ChatBubblePr
         >
           {/* Header bar */}
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/10">
-            <span className="text-white/70 text-xs font-medium">Miru</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-white/70 text-xs font-medium">Miru</span>
+              {hasActiveRules && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" title="Monitor active" />}
+              <CostBadge />
+            </div>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setVisionEnabled(!visionEnabled)}
                 className={`w-6 h-6 rounded-full hover:bg-white/10 flex items-center justify-center text-xs transition-colors ${
                   visionEnabled ? 'text-blue-400' : 'text-white/30'
                 }`}
-                title={visionEnabled ? '关闭视觉模式' : '开启视觉模式'}
+                title={visionEnabled ? '关闭视觉模式 — 零 token（仅读窗口标题）' : '开启视觉模式 — 每次分析 ~200 tokens'}
               >
                 {'\uD83D\uDC41'}
               </button>
@@ -66,7 +73,7 @@ export default function ChatBubble({ onOpenSettings, onOpenAdmin }: ChatBubblePr
             </div>
           </div>
 
-          <MessageList />
+          <MessageList onOpenAdmin={onOpenAdmin} />
 
           {/* Confirm dialog */}
           {pendingConfirm && (

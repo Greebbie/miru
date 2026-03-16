@@ -8,7 +8,12 @@ const statusStyles: Record<ToolCall['status'], string> = {
   error: 'bg-red-500/20 text-red-300',
 }
 
-export default function ToolCallBadge({ toolCall }: { toolCall: ToolCall }) {
+interface ToolCallBadgeProps {
+  toolCall: ToolCall
+  onRetry?: () => void
+}
+
+export default function ToolCallBadge({ toolCall, onRetry }: ToolCallBadgeProps) {
   const style = statusStyles[toolCall.status]
   const isRunning = toolCall.status === 'running'
 
@@ -23,6 +28,15 @@ export default function ToolCallBadge({ toolCall }: { toolCall: ToolCall }) {
       )}
       {toolCall.status === 'error' && toolCall.result && (
         <span className="max-w-[120px] truncate opacity-70">{toolCall.result.summary}</span>
+      )}
+      {toolCall.status === 'error' && onRetry && (
+        <button
+          onClick={onRetry}
+          className="ml-0.5 hover:opacity-100 opacity-70 transition-opacity"
+          title="重试"
+        >
+          {'\u21BB'}
+        </button>
       )}
     </div>
   )

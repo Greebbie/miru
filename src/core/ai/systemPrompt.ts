@@ -5,9 +5,13 @@ import { useConfigStore } from '@/stores/configStore'
  * Budget: ~45 tokens worst case, well within 200 token limit.
  */
 export function buildSystemPrompt(): string {
-  const { verbosity, formality, proactivity } = useConfigStore.getState()
+  const { verbosity, formality, proactivity, language } = useConfigStore.getState()
 
-  let prompt = 'You are Miru (みる), desktop companion. Reply in user\'s language. Never mention AI/LLM. Use tools to help. Explain results. Chain tools when needed.'
+  const langInstruction = language === 'en' ? 'Reply in English.'
+    : language === 'zh' ? '用中文回复。'
+    : 'Reply in user\'s language.'
+
+  let prompt = `You are Miru (みる), desktop companion. ${langInstruction} Never mention AI/LLM. Use tools to help. Explain results. Chain tools when needed.`
 
   // Verbosity
   if (verbosity < 0.3) {

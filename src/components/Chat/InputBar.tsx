@@ -1,7 +1,8 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useChatStore } from '@/stores/chatStore'
 import { useAI } from '@/hooks/useAI'
 import { useVoiceInput } from '@/hooks/useVoiceInput'
+import { markUserActive } from '@/hooks/useMonitor'
 import SlashMenu from './SlashMenu'
 import type { SkillDefinition } from '@/core/skills/registry'
 
@@ -20,9 +21,21 @@ export default function InputBar() {
   )
   const { isListening, toggle: toggleVoice } = useVoiceInput(handleVoiceResult)
 
+  // Listen for Alt+M toggle-voice from main process
+  // Use ref to always call latest toggleVoice, register listener once
+  const toggleVoiceRef = useRef(toggleVoice)
+  toggleVoiceRef.current = toggleVoice
+  useEffect(() => {
+    const handler = () => toggleVoiceRef.current()
+    window.electronAPI?.onToggleVoice(handler)
+    // Note: ipcRenderer.on accumulates — no off API exposed for voice,
+    // but this effect runs once so it's safe
+  }, [])
+
   const handleSend = useCallback(() => {
     const text = input.trim()
     if (!text || isStreaming) return
+    markUserActive()
     setInput('')
     setShowSlash(false)
     sendMessage(text)

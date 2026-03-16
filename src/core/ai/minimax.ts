@@ -14,8 +14,15 @@ export class MinimaxProvider implements AIProvider {
   ) {}
 
   async *streamChat(messages: Message[], tools?: ToolDef[], signal?: AbortSignal): AsyncIterable<StreamChunk> {
+    // Extract system messages (memory/vision context) and merge into system prompt
+    const extraContext = messages
+      .filter(m => m.role === 'system')
+      .map(m => m.content)
+      .join('\n')
+    const systemContent = buildSystemPrompt() + (extraContext ? '\n\n' + extraContext : '')
+
     const allMessages = [
-      { role: 'system' as const, content: buildSystemPrompt() },
+      { role: 'system' as const, content: systemContent },
       ...formatMessagesForOpenAI(messages.filter((m) => m.role !== 'system')),
     ]
 

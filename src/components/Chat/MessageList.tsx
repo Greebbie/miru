@@ -1,9 +1,12 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
 import { useChatStore } from '@/stores/chatStore'
+import { useConfigStore } from '@/stores/configStore'
 import { useAI } from '@/hooks/useAI'
+import { speakText, stopSpeaking } from '@/core/tts'
+import { toolRegistry } from '@/core/tools'
 import ToolCallBadge from './ToolCallBadge'
 
 function CopyButton({ text }: { text: string }) {
@@ -17,6 +20,37 @@ function CopyButton({ text }: { text: string }) {
       className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/10 hover:bg-white/20 rounded px-1.5 py-0.5 text-[10px] text-white/70"
     >
       Copy
+    </button>
+  )
+}
+
+function SpeakButton({ text }: { text: string }) {
+  const [isSpeaking, setIsSpeaking] = useState(false)
+
+  const handleClick = useCallback(() => {
+    if (isSpeaking) {
+      stopSpeaking()
+      setIsSpeaking(false)
+    } else {
+      speakText(text)
+      setIsSpeaking(true)
+      // Auto-reset when speech ends
+      const check = setInterval(() => {
+        if (!window.speechSynthesis.speaking) {
+          setIsSpeaking(false)
+          clearInterval(check)
+        }
+      }, 200)
+    }
+  }, [text, isSpeaking])
+
+  return (
+    <button
+      onClick={handleClick}
+      className="absolute top-1 right-8 opacity-0 group-hover:opacity-100 transition-opacity bg-white/10 hover:bg-white/20 rounded px-1.5 py-0.5 text-[10px] text-white/70"
+      title={isSpeaking ? '停止朗读' : '朗读'}
+    >
+      {isSpeaking ? '\u23F9' : '\uD83D\uDD0A'}
     </button>
   )
 }
@@ -99,10 +133,23 @@ const capabilityCategories = [
       { label: '剪贴板', prompt: '读取剪贴板内容' },
     ],
   },
+  {
+    icon: '\u2699',
+    label: '高级功能',
+    actions: [
+      { label: '监控规则', prompt: null, action: 'openAdmin' as const },
+      { label: '语音输入 Alt+M', prompt: null, action: 'info' as const },
+    ],
+  },
 ]
 
-export default function MessageList() {
+interface MessageListProps {
+  onOpenAdmin?: () => void
+}
+
+export default function MessageList({ onOpenAdmin }: MessageListProps) {
   const { messages, isStreaming, pendingPrompt, setPendingPrompt } = useChatStore()
+  const ttsEnabled = useConfigStore((s) => s.ttsEnabled)
   const { sendMessage } = useAI()
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -137,7 +184,13 @@ export default function MessageList() {
                   {cat.actions.map((a) => (
                     <button
                       key={a.label}
-                      onClick={() => sendMessage(a.prompt)}
+                      onClick={() => {
+                        if ('action' in a && a.action === 'openAdmin') {
+                          onOpenAdmin?.()
+                        } else if ('prompt' in a && a.prompt) {
+                          sendMessage(a.prompt)
+                        }
+                      }}
                       className="px-2 py-1 rounded-lg bg-white/8 hover:bg-white/15 text-white/60 hover:text-white/90 text-[11px] transition-colors"
                     >
                       {a.label}
@@ -175,10 +228,29 @@ export default function MessageList() {
             {msg.toolCalls && msg.toolCalls.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1">
                 {msg.toolCalls.map((tc) => (
-                  <ToolCallBadge key={tc.id} toolCall={tc} />
+                  <ToolCallBadge
+                    key={tc.id}
+                    toolCall={tc}
+                    onRetry={tc.status === 'error' ? async () => {
+                      useChatStore.getState().updateToolCall(msg.id, tc.id, { status: 'running' })
+                      try {
+                        const result = await toolRegistry.execute(tc.name, tc.input)
+                        useChatStore.getState().updateToolCall(msg.id, tc.id, {
+                          status: result.success ? 'done' : 'error',
+                          result,
+                        })
+                      } catch (err) {
+                        useChatStore.getState().updateToolCall(msg.id, tc.id, {
+                          status: 'error',
+                          result: { success: false, data: null, summary: err instanceof Error ? err.message : 'Unknown error' },
+                        })
+                      }
+                    } : undefined}
+                  />
                 ))}
               </div>
             )}
+            {msg.content && msg.role === 'assistant' && ttsEnabled && <SpeakButton text={msg.content} />}
             {msg.content && <CopyButton text={msg.content} />}
           </div>
         </motion.div>

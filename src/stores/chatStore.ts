@@ -50,15 +50,29 @@ const genId = () => `msg-${Date.now()}-${++msgCounter}`
 
 const MAX_PERSISTED_MESSAGES = 50
 
-function persistMessages(messages: Message[]) {
-  const toSave = messages.slice(-MAX_PERSISTED_MESSAGES).map((m) => ({
-    id: m.id,
-    role: m.role,
-    content: m.content,
-    timestamp: m.timestamp,
-    toolCalls: m.toolCalls,
-  }))
-  window.electronAPI?.storeSet('chatMessages', toSave)
+let persistTimer: ReturnType<typeof setTimeout> | null = null
+
+function persistMessages(messages: Message[], immediate = false) {
+  const doSave = () => {
+    persistTimer = null
+    const toSave = messages.slice(-MAX_PERSISTED_MESSAGES).map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      timestamp: m.timestamp,
+      toolCalls: m.toolCalls,
+    }))
+    window.electronAPI?.storeSet('chatMessages', toSave)
+  }
+
+  if (immediate) {
+    if (persistTimer !== null) clearTimeout(persistTimer)
+    doSave()
+  } else {
+    // Debounce: wait 500ms before writing to disk
+    if (persistTimer !== null) clearTimeout(persistTimer)
+    persistTimer = setTimeout(doSave, 500)
+  }
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -133,9 +147,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setStreaming: (streaming) => {
     set({ isStreaming: streaming })
-    // Persist when streaming ends
+    // Persist immediately when streaming ends
     if (!streaming) {
-      persistMessages(get().messages)
+      persistMessages(get().messages, true)
     }
   },
   setPendingPrompt: (pendingPrompt) => set({ pendingPrompt }),

@@ -12,13 +12,15 @@ import { QwenProvider } from '@/core/ai/qwen'
 import { MinimaxProvider } from '@/core/ai/minimax'
 import { parseLocal } from '@/core/parser/local'
 import { toolRegistry } from '@/core/tools'
-import { injectMemory, injectMemorySync } from '@/core/memory/injector'
+import { injectMemory } from '@/core/memory/injector'
 import { extractFromConversation } from '@/core/memory/extractor'
 import { pruneMessages } from '@/core/ai/tokenBudget'
 import { estimateTokens } from '@/core/ai/tokenBudget'
 import { buildSystemPrompt } from '@/core/ai/systemPrompt'
 import { skillRegistry } from '@/core/skills/registry'
 import { executeSkill } from '@/core/skills/executor'
+import { useCostStore } from '@/stores/costStore'
+import { speakText } from '@/core/tts'
 
 const MAX_TOOL_ROUNDS = 5
 
@@ -246,9 +248,10 @@ export function useAI() {
     // Create initial assistant message placeholder
     let assistantId = chatStore.addMessage({ role: 'assistant', content: '' })
 
-    // Track last tool call for loop detection
+    // Track tool calls for loop detection (same key OR alternating pattern)
     let lastToolKey = ''
     let sameToolCount = 0
+    const recentToolKeys: string[] = []
 
     try {
       let round = 0
@@ -297,17 +300,36 @@ export function useAI() {
         if (roundToolCalls.length === 0) {
           charStore.setEmotions({ joy: 0.6 })
           extractFromConversation(useChatStore.getState().messages)
+
+          // Cost tracking
+          const { provider, model } = useConfigStore.getState()
+          const inputTokens = prunedMessages.reduce((sum, m) => sum + estimateTokens(m.content), 0)
+          const outputTokens = estimateTokens(roundText)
+          useCostStore.getState().addUsage(inputTokens, outputTokens, provider, model)
+
+          // TTS for short responses
+          if (useConfigStore.getState().ttsEnabled && roundText.length > 0 && roundText.length < 500) {
+            speakText(roundText)
+          }
+
           break
         }
 
-        // Loop detection: same tool+params called twice in a row → force break
+        // Loop detection: same tool+params called twice in a row, or alternating pattern
         const toolKey = roundToolCalls.map((tc) => `${tc.name}:${JSON.stringify(tc.input)}`).join('|')
+        recentToolKeys.push(toolKey)
         if (toolKey === lastToolKey) {
           sameToolCount++
           if (sameToolCount >= 2) break
         } else {
           sameToolCount = 0
           lastToolKey = toolKey
+        }
+        // Detect alternating pattern: A,B,A,B → break
+        if (recentToolKeys.length >= 4) {
+          const len = recentToolKeys.length
+          if (recentToolKeys[len - 1] === recentToolKeys[len - 3] &&
+              recentToolKeys[len - 2] === recentToolKeys[len - 4]) break
         }
 
         // Append assistant message (with tool_calls) to conversation

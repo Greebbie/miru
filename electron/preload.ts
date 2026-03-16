@@ -59,6 +59,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setWindowSize: (width: number, height: number) =>
     ipcRenderer.invoke('set-window-size', width, height),
 
+  // Minimize (hide to tray)
+  minimizeWindow: () =>
+    ipcRenderer.invoke('minimize-window'),
+
   // Web search
   webSearch: (query: string) =>
     ipcRenderer.invoke('web-search', query) as Promise<{ abstract: string; results: { title: string; snippet: string; url: string }[] }>,
@@ -66,6 +70,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // IPC event listeners
   onToggleCommandPalette: (callback: () => void) => {
     ipcRenderer.on('toggle-command-palette', () => callback())
+  },
+  onToggleVoice: (callback: () => void) => {
+    ipcRenderer.on('toggle-voice', () => callback())
   },
 
   // Special paths
@@ -99,6 +106,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('monitor-stop'),
   onWindowChanged: (callback: (data: { app: string; title: string }) => void) => {
     ipcRenderer.on('window-changed', (_event, data) => callback(data))
+  },
+  offWindowChanged: () => {
+    ipcRenderer.removeAllListeners('window-changed')
   },
 
   // Automation

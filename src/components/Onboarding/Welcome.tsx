@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useConfigStore, type AIProviderType } from '@/stores/configStore'
 
-const STEPS = ['intro', 'provider', 'apikey', 'done'] as const
+const STEPS = ['intro', 'provider', 'apikey', 'features', 'done'] as const
 type Step = typeof STEPS[number]
 
 interface ProviderInfo {
@@ -59,7 +59,7 @@ export default function Welcome() {
       if (providerInfo.needsKey) saveKey(apiKey)
       if (providerInfo.needsBaseUrl) saveBaseUrl(baseUrl || providerInfo.defaultBaseUrl || '')
       if (providerInfo.needsGroupId) saveGroupId(groupId)
-      setStep('done')
+      setStep('features')
     } catch {
       setTestResult('Miru 连不上...检查一下配置对不对？')
     } finally {
@@ -183,6 +183,22 @@ export default function Welcome() {
                 className="w-full text-white/40 text-xs mt-2 hover:text-white/60"
               >
                 返回
+              </button>
+            </StepContainer>
+          )}
+
+          {step === 'features' && (
+            <StepContainer key="features">
+              <h2 className="text-white text-base font-bold mb-3">Miru 可以做的事</h2>
+              <div className="space-y-2 mb-4 text-sm">
+                <p className="text-white/70"><span className="text-white/40 mr-2">{'\uD83D\uDCAC'}</span>对话 — 聊天、搜索、写代码、解答问题</p>
+                <p className="text-white/70"><span className="text-white/40 mr-2">{'\uD83D\uDEE0'}</span>工具 — 整理文件、打开应用、系统操作</p>
+                <p className="text-white/70"><span className="text-white/40 mr-2">{'\uD83D\uDC41'}</span>值守 — 监控窗口、自动回复消息</p>
+                <p className="text-white/70"><span className="text-white/40 mr-2">{'\uD83C\uDFA4'}</span>语音 — 说话输入 (Alt+M)，朗读回复</p>
+              </div>
+              <p className="text-white/30 text-xs mb-4 text-center">输入 / 查看更多命令 · 右键开启管理面板</p>
+              <button onClick={() => setStep('done')} className="btn-primary w-full">
+                开始使用 Miru {'\u2728'}
               </button>
             </StepContainer>
           )}

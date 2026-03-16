@@ -13,13 +13,9 @@ interface CharacterState {
   emotions: Emotions
   animationState: AnimationState
   lastInteraction: number
-  isBlinking: boolean
 
-  setEmotion: (key: keyof Emotions, value: number) => void
   setEmotions: (emotions: Partial<Emotions>) => void
   decay: () => void
-  blink: () => void
-  updateAnimationState: () => void
 }
 
 const DECAY_FACTOR = 0.95
@@ -45,22 +41,10 @@ function getAnimationState(emotions: Emotions, lastInteraction: number): Animati
   return 'idle'
 }
 
-export const useCharacterStore = create<CharacterState>((set, get) => ({
+export const useCharacterStore = create<CharacterState>((set) => ({
   emotions: { curiosity: 0, focus: 0, joy: 0, concern: 0 },
   animationState: 'idle',
   lastInteraction: Date.now(),
-  isBlinking: false,
-
-  setEmotion: (key, value) => {
-    set((state) => {
-      const emotions = { ...state.emotions, [key]: Math.max(0, Math.min(1, value)) }
-      return {
-        emotions,
-        lastInteraction: Date.now(),
-        animationState: getAnimationState(emotions, Date.now()),
-      }
-    })
-  },
 
   setEmotions: (partial) => {
     set((state) => {
@@ -78,26 +62,23 @@ export const useCharacterStore = create<CharacterState>((set, get) => ({
 
   decay: () => {
     set((state) => {
+      const { curiosity, focus, joy, concern } = state.emotions
+      // Skip update if all emotions already near-zero — avoids unnecessary re-renders
+      if (curiosity < 0.001 && focus < 0.001 && joy < 0.001 && concern < 0.001) {
+        const newAnim = getAnimationState(state.emotions, state.lastInteraction)
+        if (newAnim === state.animationState) return state
+        return { animationState: newAnim }
+      }
       const emotions = {
-        curiosity: state.emotions.curiosity * DECAY_FACTOR,
-        focus: state.emotions.focus * DECAY_FACTOR,
-        joy: state.emotions.joy * DECAY_FACTOR,
-        concern: state.emotions.concern * DECAY_FACTOR,
+        curiosity: curiosity * DECAY_FACTOR,
+        focus: focus * DECAY_FACTOR,
+        joy: joy * DECAY_FACTOR,
+        concern: concern * DECAY_FACTOR,
       }
       return {
         emotions,
         animationState: getAnimationState(emotions, state.lastInteraction),
       }
     })
-  },
-
-  blink: () => {
-    set({ isBlinking: true })
-    setTimeout(() => set({ isBlinking: false }), 150)
-  },
-
-  updateAnimationState: () => {
-    const state = get()
-    set({ animationState: getAnimationState(state.emotions, state.lastInteraction) })
   },
 }))

@@ -15,7 +15,7 @@ interface MonitorRule {
   name: string
   enabled: boolean
   trigger: {
-    type: 'app_focus' | 'window_title' | 'schedule' | 'file_change'
+    type: 'app_focus' | 'window_title'
     pattern: string
     app?: string
   }

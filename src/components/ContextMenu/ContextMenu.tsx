@@ -119,11 +119,23 @@ export default function ContextMenu({
         管理面板
       </button>
 
+      <button
+        onClick={() => { window.electronAPI?.minimizeWindow(); onClose() }}
+        className="w-full px-3 py-1.5 text-left text-xs text-white/80 hover:bg-white/10 transition-colors"
+      >
+        最小化
+      </button>
+
       <div className="my-1 border-t border-white/10" />
 
       <button
-        onClick={onClose}
-        className="w-full px-3 py-1.5 text-left text-xs text-white/40 hover:bg-white/10 transition-colors"
+        onClick={() => {
+          const store = useChatStore.getState()
+          store.openChat()
+          store.setPendingPrompt('帮助')
+          onClose()
+        }}
+        className="w-full px-3 py-1.5 text-left text-xs text-white/80 hover:bg-white/10 transition-colors"
       >
         帮助
       </button>

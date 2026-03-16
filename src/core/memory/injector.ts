@@ -73,50 +73,6 @@ export async function injectMemory(screenContext?: string, userMessage?: string)
   return parts.join('\n')
 }
 
-/**
- * Synchronous version for backward compatibility.
- * Does not include FTS5 fact search.
- */
-export function injectMemorySync(screenContext?: string): string {
-  const parts: string[] = []
-
-  const identity = memoryStore.getIdentity()
-  const idParts = Object.entries(identity)
-    .filter(([, v]) => v)
-    .map(([k, v]) => (k === 'name' ? v : `${k}:${v}`))
-  if (idParts.length > 0) {
-    parts.push(`[User] ${idParts.join(' | ')}`)
-  }
-
-  const prefs = memoryStore.getPreferences()
-  const prefParts = Object.entries(prefs)
-    .filter(([, v]) => v)
-    .map(([k, v]) => (Array.isArray(v) ? `${k}:${v.join(',')}` : `${k}:${v}`))
-  if (prefParts.length > 0) {
-    parts.push(`[Prefs] ${prefParts.join(' | ')}`)
-  }
-
-  const recentFacts = memoryStore.getFacts().slice(-3)
-  if (recentFacts.length > 0) {
-    const factParts = recentFacts.map((f) => f.content.slice(0, 60))
-    parts.push(`[Facts] ${factParts.join(' | ')}`)
-  }
-
-  const episodes = memoryStore.getEpisodes(5)
-  if (episodes.length > 0) {
-    const recentParts = episodes.map((e) => {
-      const outcome = e.outcome ? `(${e.outcome})` : ''
-      return `${e.summary}${outcome}`
-    })
-    parts.push(`[Recent] ${recentParts.join(' | ')}`)
-  }
-
-  if (screenContext) {
-    parts.push(`[Screen] ${screenContext}`)
-  }
-
-  return parts.join('\n')
-}
 
 /** Extract meaningful keywords from user message for FTS5 search */
 function extractKeywords(text: string): string[] {

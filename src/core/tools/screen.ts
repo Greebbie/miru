@@ -7,6 +7,9 @@ toolRegistry.register({
   riskLevel: 'low',
   category: 'screen',
   execute: async () => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     try {
       const win = await window.electronAPI.getActiveWindow()
       return {
@@ -27,6 +30,9 @@ toolRegistry.register({
   riskLevel: 'low',
   category: 'screen',
   execute: async () => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     try {
       const procs = await window.electronAPI.getProcessList()
       const lines = procs.map((p) => `${p.name}${p.title ? ` - ${p.title}` : ''}`).join(', ')
@@ -48,6 +54,9 @@ toolRegistry.register({
   riskLevel: 'medium',
   category: 'screen',
   execute: async () => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     try {
       const status = await window.electronAPI.visionStatus()
       if (!status.initialized) {
@@ -72,6 +81,9 @@ toolRegistry.register({
   riskLevel: 'medium',
   category: 'screen',
   execute: async () => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     try {
       const dataUrl = await window.electronAPI.captureScreenshot()
       return {

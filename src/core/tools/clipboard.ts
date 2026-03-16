@@ -7,6 +7,9 @@ toolRegistry.register({
   riskLevel: 'low',
   category: 'clipboard',
   execute: async () => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     try {
       const text = await window.electronAPI.clipboardRead()
       return {
@@ -33,6 +36,9 @@ toolRegistry.register({
   riskLevel: 'low',
   category: 'clipboard',
   execute: async (params) => {
+    if (!window.electronAPI) {
+      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+    }
     try {
       await window.electronAPI.clipboardWrite(params.text as string)
       return { success: true, data: null, summary: 'Copied to clipboard' }

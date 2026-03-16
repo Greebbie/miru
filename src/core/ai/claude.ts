@@ -10,11 +10,18 @@ export class ClaudeProvider implements AIProvider {
   ) {}
 
   async *streamChat(messages: Message[], tools?: ToolDef[], signal?: AbortSignal): AsyncIterable<StreamChunk> {
+    // Extract system messages (memory/vision context) and merge into system prompt
+    const extraContext = messages
+      .filter(m => m.role === 'system')
+      .map(m => m.content)
+      .join('\n')
+    const systemPrompt = buildSystemPrompt() + (extraContext ? '\n\n' + extraContext : '')
+
     const body: Record<string, unknown> = {
       model: this.model,
       max_tokens: 1024,
       stream: true,
-      system: buildSystemPrompt(),
+      system: systemPrompt,
       messages: formatMessagesForClaude(messages.filter((m) => m.role !== 'system')),
     }
 
