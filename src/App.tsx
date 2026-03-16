@@ -40,10 +40,10 @@ export default function App() {
     memoryStore.init()
   }, [])
 
-  // Enable click-through on transparent pixels, forward events for hit-testing
-  useEffect(() => {
-    window.electronAPI?.setIgnoreCursorEvents(true, { forward: true })
-  }, [])
+  // Transparent window with transparent:true handles click-through natively —
+  // pixels with alpha=0 pass through, pixels with alpha>0 capture events.
+  // Do NOT call setIgnoreCursorEvents(true, { forward: true }) — on Windows
+  // it forwards mousemove but not clicks reliably.
 
   // Listen for command palette IPC from main process
   useEffect(() => {

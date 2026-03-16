@@ -48,7 +48,6 @@ export default function Character() {
 
       const dy = homeY - pos.y
       if (Math.abs(dy) < 2 && Math.abs(velocity) < 10) {
-        // Close enough, snap to home
         pos.y = homeY
         localPosRef.current = pos
         window.electronAPI?.setWindowPosition(pos.x, homeY)
@@ -56,12 +55,11 @@ export default function Character() {
         return
       }
 
-      const dt = Math.min((now - lastTime) / 1000, 0.05) // cap dt to avoid big jumps
+      const dt = Math.min((now - lastTime) / 1000, 0.05)
       lastTime = now
       velocity += GRAVITY * dt
       let newY = pos.y + velocity * dt
 
-      // Overshoot check
       if (dy > 0 && newY > homeY) {
         newY = homeY
         velocity = 0
@@ -86,7 +84,7 @@ export default function Character() {
     }
   }, [])
 
-  // Drag handling — throttled with rAF, local position tracking
+  // Drag handling — throttled with rAF, DOM overlay for event capture
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return
 
@@ -96,8 +94,12 @@ export default function Character() {
       gravityRef.current = null
     }
 
-    // Temporarily disable click-through so drag works smoothly
-    window.electronAPI?.setIgnoreCursorEvents(false)
+    // Add a full-window overlay to capture mouse events over transparent areas during drag.
+    // With transparent:true, pixels with alpha=0 normally pass through to the desktop.
+    // The overlay gives every pixel alpha>0 so the OS sends all events to our window.
+    const overlay = document.createElement('div')
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.02);cursor:grabbing'
+    document.body.appendChild(overlay)
 
     const startX = e.screenX
     const startY = e.screenY
@@ -139,17 +141,15 @@ export default function Character() {
       window.removeEventListener('mouseup', handleUp)
       if (rafId !== null) {
         cancelAnimationFrame(rafId)
-        // Flush final position
         flushMove()
       }
 
-      // Re-enable click-through
-      window.electronAPI?.setIgnoreCursorEvents(true, { forward: true })
+      // Remove the overlay — restores transparent click-through
+      overlay.remove()
 
       if (moved < 5) {
         toggleChat()
       } else {
-        // Update local position for gravity
         localPosRef.current = { x: winX + pendingDx, y: winY + pendingDy }
         applyGravity()
       }
@@ -170,8 +170,9 @@ export default function Character() {
       style={{
         width: IMG_WIDTH + 20,
         height: IMG_HEIGHT + 20,
-        // Barely-visible background so Electron's hit-test captures clicks on the whole bounding box
-        background: 'rgba(0, 0, 0, 0.01)',
+        // Background with enough alpha (>0) so the OS sends mouse events to this area.
+        // With transparent:true, alpha=0 passes through, alpha>0 captures events.
+        background: 'rgba(0, 0, 0, 0.05)',
       }}
       onMouseDown={handleMouseDown}
     >
