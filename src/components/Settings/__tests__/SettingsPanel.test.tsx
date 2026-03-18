@@ -11,6 +11,11 @@ vi.mock('@/core/errors/humanize', () => ({
   humanizeError: vi.fn((err: any) => String(err)),
 }))
 
+vi.mock('@/core/ai/createProvider', () => ({
+  isVisionCapable: vi.fn(() => true),
+  createProvider: vi.fn(),
+}))
+
 vi.mock('@/i18n/useI18n', () => ({
   useI18n: () => ({
     t: (key: string) => key,
@@ -45,7 +50,7 @@ describe('SettingsPanel', () => {
       proactivity: 0.3,
       language: 'zh',
       soundEnabled: true,
-      visionEnabled: false,
+      visionTarget: 'off',
       ttsEnabled: false,
       isOnboarded: true,
       userName: 'Test',
@@ -82,15 +87,16 @@ describe('SettingsPanel', () => {
   it('shows vision toggle in general tab', () => {
     render(<SettingsPanel onClose={onClose} />)
     fireEvent.click(screen.getByText('settings.tab.general'))
-    // Vision section title contains '视觉分析' (full: '视觉分析 (YOLO + OCR)')
-    expect(screen.getByText(/视觉分析/)).toBeInTheDocument()
+    // Vision section title is now '视觉功能 / Vision'
+    expect(screen.getByText(/视觉功能/)).toBeInTheDocument()
+    // Simple toggle instead of download UI
+    expect(screen.getByText('启用视觉')).toBeInTheDocument()
   })
 
-  it('vision status component renders', () => {
+  it('STT status component renders', () => {
     render(<SettingsPanel onClose={onClose} />)
     fireEvent.click(screen.getByText('settings.tab.general'))
-    // VisionSetup and STTSetup both initially show '检查中...' when lang is 'zh'
-    // Use getAllByText since both components show this status text
+    // STTSetup initially shows '检查中...' when lang is 'zh'
     const checkingElements = screen.getAllByText('检查中...')
     expect(checkingElements.length).toBeGreaterThanOrEqual(1)
   })

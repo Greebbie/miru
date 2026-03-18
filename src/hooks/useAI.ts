@@ -46,20 +46,19 @@ async function getScreenContext(): Promise<string> {
 }
 
 /**
- * Get vision context if enabled. Now handled by describe_screen tool on demand.
- * Auto-context only provides window title (Layer 0, zero tokens).
+ * Get vision context if enabled. Returns Layer 0 info (window title, zero tokens).
+ * Actual screen analysis is handled by describe_screen/describe_window tools on demand.
  */
 async function getVisionContext(): Promise<string> {
   const config = useConfigStore.getState()
-  if (!config.visionEnabled) return ''
+  if (config.visionTarget === 'off') return ''
   if (!window.electronAPI) return ''
   try {
-    const status = await window.electronAPI.visionStatus()
-    if (!status.initialized) return '' // Don't auto-init, avoid surprise downloads
-    const result = await window.electronAPI.visionAnalyze()
-    const ocrText = result.ocrText || ''
-    if (!ocrText.trim()) return '[Vision active] Miru can see the screen. Use describe_screen for details.'
-    return `[Vision active] ${ocrText.slice(0, 200)}`
+    const targetInfo = config.visionTarget === 'fullscreen'
+      ? 'fullscreen'
+      : `window: ${config.visionTarget}`
+    const win = await window.electronAPI.getActiveWindow()
+    return `[Vision ON, target: ${targetInfo}] Active: ${win.app} - ${win.title}. Call describe_screen to capture.`
   } catch {
     return ''
   }
@@ -279,7 +278,7 @@ export function useAI() {
     // Token budget config
     const tokenBudget = useConfigStore.getState().tokenBudget
     const pruneLimit = tokenBudget === 'minimal' ? 3000 : tokenBudget === 'smart' ? 6000 : 4000
-    const isSimpleMessage = text.length < 100 && !/打开|文件|搜索|搜|查|删除|创建|执行|天气|新闻|翻译|open|file|search|delete|create|run|list|move|weather|translate|news/i.test(text)
+    const isSimpleMessage = text.length < 100 && !/打开|文件|搜索|搜|查|删除|创建|执行|天气|新闻|翻译|看|屏幕|窗口|截图|视觉|open|file|search|delete|create|run|list|move|weather|translate|news|screen|window|see|look|vision/i.test(text)
 
     // Get screen context — use vision if enabled, otherwise active window title
     const visionContext = await getVisionContext()

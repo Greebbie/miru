@@ -99,14 +99,21 @@ export default function Character() {
     return () => clearTimeout(timeout)
   }, [])
 
-  // Drag via Pointer Events + setPointerCapture — reliable on all platforms
+  // Drag via document-level listeners (not pointer capture).
+  // On transparent Electron windows, setPointerCapture breaks because the overlay
+  // (z-index:99999) intercepts all pointer events, preventing the captured element
+  // from receiving them. Instead we listen on document in capture phase, which
+  // guarantees delivery regardless of z-index layering.
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return
-    const el = e.currentTarget as HTMLElement
-    el.setPointerCapture(e.pointerId)
     isDraggingRef.current = true
     if (animDivRef.current) animDivRef.current.style.animationPlayState = 'paused'
     if (imgRef.current) imgRef.current.style.transition = 'none'
+
+    // Overlay ensures every pixel has alpha > 0 so the OS keeps forwarding events
+    const overlay = document.createElement('div')
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.01);cursor:grabbing'
+    document.body.appendChild(overlay)
 
     const winX = e.screenX - e.clientX
     const winY = e.screenY - e.clientY
@@ -120,7 +127,7 @@ export default function Character() {
 
     const flushMove = () => {
       dragRafId = null
-      if (ipcPending) return // don't queue another IPC until previous finishes
+      if (ipcPending) return
       ipcPending = true
       const p = window.electronAPI?.setWindowPosition(winX + pendingDx, winY + pendingDy)
       if (p && typeof p.then === 'function') {
@@ -140,9 +147,9 @@ export default function Character() {
     }
 
     const onUp = () => {
-      el.removeEventListener('pointermove', onMove)
-      el.removeEventListener('pointerup', onUp)
-      el.removeEventListener('lostpointercapture', onUp)
+      document.removeEventListener('pointermove', onMove, true)
+      document.removeEventListener('pointerup', onUp, true)
+      overlay.remove()
       if (dragRafId !== null) {
         cancelAnimationFrame(dragRafId)
       }
@@ -151,11 +158,9 @@ export default function Character() {
       if (imgRef.current) imgRef.current.style.transition = ''
 
       if (moved >= 5) {
-        // Real drag → sync final position
         ipcPending = false
         window.electronAPI?.setWindowPosition(winX + pendingDx, winY + pendingDy)
       } else {
-        // Pure click → defer toggleChat to avoid blocking UI
         setTimeout(() => {
           playSound('click')
           toggleChat()
@@ -163,9 +168,9 @@ export default function Character() {
       }
     }
 
-    el.addEventListener('pointermove', onMove)
-    el.addEventListener('pointerup', onUp)
-    el.addEventListener('lostpointercapture', onUp)
+    // Capture phase on document — guaranteed delivery regardless of overlay z-index
+    document.addEventListener('pointermove', onMove, true)
+    document.addEventListener('pointerup', onUp, true)
   }, [toggleChat])
 
   // Build dynamic glow shadow

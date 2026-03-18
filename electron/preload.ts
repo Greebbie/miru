@@ -86,27 +86,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getHomeDir: () =>
     ipcRenderer.invoke('get-home-dir') as Promise<string>,
 
-  // Vision
-  visionInit: () =>
-    ipcRenderer.invoke('vision-init') as Promise<{ success: boolean; error?: string }>,
-  visionAnalyze: () =>
-    ipcRenderer.invoke('vision-analyze') as Promise<{
-      detections: { label: string; confidence: number; bbox: [number, number, number, number] }[]
-      ocrText: string
-      summary: string
-    }>,
-  visionStatus: () =>
-    ipcRenderer.invoke('vision-status') as Promise<{ initialized: boolean }>,
-
-  // Vision: window-targeted
+  // Vision: window list & capture
   getWindowList: () =>
     ipcRenderer.invoke('get-window-list') as Promise<{ id: string; name: string }[]>,
-  visionAnalyzeWindow: (windowName: string) =>
-    ipcRenderer.invoke('vision-analyze-window', windowName) as Promise<{
-      detections: { label: string; confidence: number; bbox: [number, number, number, number] }[]
-      ocrText: string
-      summary: string
-    }>,
+  captureWindow: (windowName: string, options?: { width?: number; height?: number }) =>
+    ipcRenderer.invoke('capture-window', windowName, options) as Promise<string>,
 
   // Skill Marketplace
   skillGetDir: () =>

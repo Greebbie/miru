@@ -348,6 +348,33 @@ const patterns: Pattern[] = [
     tool: 'describe_screen',
     extract: () => ({}),
   },
+  // Describe specific window — "看我的微信窗口" / "看看Chrome" / "look at WeChat window"
+  {
+    regex: /^(?:看看?|帮我看看?|分析|look at|check|show me)\s*(?:我的)?(.+?)(?:窗口|的窗口|window)?$/i,
+    tool: 'describe_window',
+    extract: (m: RegExpMatchArray) => ({ window_name: m[1].trim() }),
+    // Only match if the captured text is a known app or looks like a window name
+    // Avoid matching generic phrases like "看看天气"
+    guard: (m) => {
+      const name = m[1].trim().toLowerCase()
+      // Must not be already handled by other patterns (screen/desktop variants)
+      if (/屏幕|桌面|screen|desktop/.test(name)) return false
+      // Must look like an app name (known app or short name)
+      return KNOWN_APPS.has(name) || name.length <= 10
+    },
+  },
+  // Bare "看看" / "你看看" / "看一下" — when vision target is set, user expects Miru to look
+  {
+    regex: /^(?:你)?(?:看看|看一下|看一眼|帮我看|帮我看看)[？?]?$/i,
+    tool: 'describe_screen',
+    extract: () => ({}),
+  },
+  // "你看到什么" / "看到了什么" / "能看到什么"
+  {
+    regex: /^(?:你)?(?:看到|能看到|能看见|看得到|看得见)(?:什么|了什么|啥)[？?]?$/i,
+    tool: 'describe_screen',
+    extract: () => ({}),
+  },
   // Looser Chinese screen queries
   {
     regex: /^(?:我的)?屏幕(?:上)?(?:有什么|是什么|显示什么|在显示什么|内容|怎么了)[？?]?$/i,
@@ -412,6 +439,23 @@ const patterns: Pattern[] = [
     regex: /^(?:\/看屏幕|看一下屏幕|read.?screen)$/i,
     skill: 'screen_reader',
     extract: () => ({}),
+  },
+
+  // --- Automation: Send message to app ---
+
+  // "回复微信 xxx" / "在微信里说 xxx" / "帮我回微信 xxx"
+  {
+    regex: /^(?:回复|回|在|给)\s*(.+?)(?:说|发|回复|发送)\s+(.+)$/i,
+    tool: 'send_message_to_app',
+    extract: (m) => ({ app: m[1].trim(), message: m[2].trim() }),
+    guard: (m) => isKnownApp(m[1].trim()),
+  },
+  // "send xxx to WeChat" / "reply xxx in WeChat"
+  {
+    regex: /^(?:send|reply|type)\s+(.+?)\s+(?:to|in)\s+(.+)$/i,
+    tool: 'send_message_to_app',
+    extract: (m) => ({ app: m[2].trim(), message: m[1].trim() }),
+    guard: (m) => isKnownApp(m[2].trim()),
   },
 
   // --- Help ---

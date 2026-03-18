@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import fs from 'fs'
 import os from 'os'
 import { exec, execFile } from 'child_process'
-import { initVision, analyzeScreen, isVisionInitialized } from './vision'
+
 import { initSTT, transcribeAudio, isSTTInitialized, destroySTT } from './stt'
 import { setupMonitor } from './monitor'
 import { setupAutomation } from './automation'
@@ -456,7 +456,7 @@ ipcMain.handle('capture-screenshot', async () => {
   })
   if (sources.length === 0) throw new Error('No screen source available')
   const thumbnail = sources[0].thumbnail
-  const dataUrl = thumbnail.toJPEG(60).toString('base64')
+  const dataUrl = thumbnail.toJPEG(85).toString('base64')
   return `data:image/jpeg;base64,${dataUrl}`
 })
 
@@ -532,38 +532,7 @@ ipcMain.handle('web-search', async (_event, query: string) => {
   }
 })
 
-// ---- Vision IPC ----
-
-ipcMain.handle('vision-init', async () => {
-  try {
-    const modelDir = path.join(app.getPath('userData'), 'models')
-    await initVision(modelDir, __dirname)
-    return { success: true }
-  } catch (err) {
-    return { success: false, error: (err as Error).message }
-  }
-})
-
-ipcMain.handle('vision-analyze', async () => {
-  try {
-    const sources = await desktopCapturer.getSources({
-      types: ['screen'],
-      thumbnailSize: { width: 640, height: 360 },
-    })
-    if (sources.length === 0) throw new Error('No screen source available')
-    const jpegBuffer = sources[0].thumbnail.toJPEG(80)
-    const result = await analyzeScreen(Buffer.from(jpegBuffer))
-    return result
-  } catch (err) {
-    return { detections: [], ocrText: '', summary: `Vision error: ${(err as Error).message}` }
-  }
-})
-
-ipcMain.handle('vision-status', () => {
-  return { initialized: isVisionInitialized() }
-})
-
-// ---- Vision IPC: Window-targeted ----
+// ---- Vision IPC: Window list & capture ----
 
 ipcMain.handle('get-window-list', async () => {
   const sources = await desktopCapturer.getSources({
@@ -573,51 +542,119 @@ ipcMain.handle('get-window-list', async () => {
   return sources.map(s => ({ id: s.id, name: s.name })).filter(s => s.name)
 })
 
-ipcMain.handle('vision-analyze-window', async (_event, windowName: string) => {
-  try {
-    // Auto-init vision if needed
-    if (!isVisionInitialized()) {
-      const modelDir = path.join(app.getPath('userData'), 'models')
-      await initVision(modelDir, __dirname)
-    }
+ipcMain.handle('capture-window', async (_event, windowName: string, options?: { width?: number; height?: number }) => {
+  const maxW = options?.width ?? 800
+  const maxH = options?.height ?? 600
 
-    const sources = await desktopCapturer.getSources({
-      types: ['window'],
-      thumbnailSize: { width: 640, height: 360 },
-    })
-
-    // Fuzzy match window name (case-insensitive)
-    const lowerName = windowName.toLowerCase()
-    let source = sources.find(s => s.name.toLowerCase().includes(lowerName))
-
-    // Fallback to full screen if window not found — report it
-    let fellBackToFullScreen = false
-    if (!source) {
-      const screenSources = await desktopCapturer.getSources({
-        types: ['screen'],
-        thumbnailSize: { width: 640, height: 360 },
-      })
-      source = screenSources[0]
-      fellBackToFullScreen = true
-    }
-
-    if (!source) {
-      return { detections: [], ocrText: '', summary: 'No source available' }
-    }
-
-    const jpegBuffer = source.thumbnail.toJPEG(80)
-    const result = await analyzeScreen(Buffer.from(jpegBuffer))
-    if (fellBackToFullScreen) {
-      return {
-        ...result,
-        summary: `[Window "${windowName}" not found, used full screen] ${result.summary}`,
-      }
-    }
-    return result
-  } catch (err) {
-    return { detections: [], ocrText: '', summary: `Vision error: ${(err as Error).message}` }
+  if (os.platform() === 'win32') {
+    // Use native Win32 API via PowerShell for accurate, real-time window capture.
+    // desktopCapturer thumbnails are cached and often stale/wrong.
+    return await captureWindowNative(windowName, maxW, maxH)
   }
+
+  // Fallback for non-Windows: use desktopCapturer (best effort)
+  const sources = await desktopCapturer.getSources({
+    types: ['window'],
+    thumbnailSize: { width: maxW, height: maxH },
+  })
+  const lowerName = windowName.toLowerCase()
+  const source = sources.find(s => s.name.toLowerCase().includes(lowerName))
+  if (!source) throw new Error(`Window "${windowName}" not found`)
+  const jpegBuffer = source.thumbnail.toJPEG(85)
+  return `data:image/jpeg;base64,${jpegBuffer.toString('base64')}`
 })
+
+/**
+ * Native Win32 window capture via PowerShell.
+ * Writes C# source to a temp file to avoid PowerShell here-string formatting issues,
+ * then compiles and runs it. Uses PrintWindow API for accurate capture.
+ * Returns base64 JPEG data URL.
+ */
+function captureWindowNative(windowName: string, maxW: number, maxH: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const sanitized = windowName.replace(/'/g, "''")
+    const tempDir = app.getPath('temp')
+    const tempFile = path.join(tempDir, `miru-capture-${Date.now()}.cs`)
+
+    // Write C# source to temp file to avoid PS here-string issues
+    const csSource = [
+      'using System;',
+      'using System.Drawing;',
+      'using System.Drawing.Imaging;',
+      'using System.Runtime.InteropServices;',
+      'using System.Text;',
+      'using System.IO;',
+      'public class WinCapture {',
+      '  [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc f, IntPtr p);',
+      '  [DllImport("user32.dll")] static extern int GetWindowTextLength(IntPtr h);',
+      '  [DllImport("user32.dll")] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);',
+      '  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);',
+      '  [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);',
+      '  [DllImport("user32.dll")] static extern bool PrintWindow(IntPtr h, IntPtr dc, uint f);',
+      '  delegate bool EnumWindowsProc(IntPtr h, IntPtr p);',
+      '  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L,T,R,B; }',
+      '  public static string Go(string name, int mw, int mh) {',
+      '    IntPtr found = IntPtr.Zero;',
+      '    string lo = name.ToLower();',
+      '    EnumWindows((h, _) => {',
+      '      if (!IsWindowVisible(h)) return true;',
+      '      int len = GetWindowTextLength(h);',
+      '      if (len == 0) return true;',
+      '      var sb = new StringBuilder(len + 1);',
+      '      GetWindowText(h, sb, sb.Capacity);',
+      '      if (sb.ToString().ToLower().Contains(lo)) { found = h; return false; }',
+      '      return true;',
+      '    }, IntPtr.Zero);',
+      '    if (found == IntPtr.Zero) return "";',
+      '    RECT r; GetWindowRect(found, out r);',
+      '    int w = r.R - r.L, h2 = r.B - r.T;',
+      '    if (w <= 0 || h2 <= 0) return "";',
+      '    using (var bmp = new Bitmap(w, h2)) {',
+      '      using (var g = Graphics.FromImage(bmp)) {',
+      '        IntPtr dc = g.GetHdc();',
+      '        PrintWindow(found, dc, 2);',
+      '        g.ReleaseHdc(dc);',
+      '      }',
+      '      float sc = Math.Min((float)mw/w, (float)mh/h2);',
+      '      sc = Math.Min(sc, 1f);',
+      '      int nw = (int)(w*sc), nh = (int)(h2*sc);',
+      '      using (var rs = new Bitmap(nw, nh)) {',
+      '        using (var g2 = Graphics.FromImage(rs)) {',
+      '          g2.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;',
+      '          g2.DrawImage(bmp, 0, 0, nw, nh);',
+      '        }',
+      '        using (var ms = new MemoryStream()) {',
+      '          rs.Save(ms, ImageFormat.Jpeg);',
+      '          return Convert.ToBase64String(ms.ToArray());',
+      '        }',
+      '      }',
+      '    }',
+      '  }',
+      '}',
+    ].join('\n')
+
+    try {
+      fs.writeFileSync(tempFile, csSource, 'utf-8')
+    } catch (e) {
+      return reject(new Error(`Failed to write temp file: ${(e as Error).message}`))
+    }
+
+    const psScript = `Add-Type -AssemblyName System.Drawing; Add-Type -Path '${tempFile.replace(/'/g, "''")}'; $r = [WinCapture]::Go('${sanitized}', ${maxW}, ${maxH}); Remove-Item '${tempFile.replace(/'/g, "''")}' -ErrorAction SilentlyContinue; Write-Output $r`
+
+    execFile('powershell', ['-NoProfile', '-Command', psScript], {
+      timeout: 15000,
+      maxBuffer: 10 * 1024 * 1024,
+    }, (err, stdout) => {
+      // Clean up temp file on error too
+      try { fs.unlinkSync(tempFile) } catch { /* ignore */ }
+
+      if (err) return reject(new Error(`Window capture failed: ${err.message}`))
+      const b64 = (stdout || '').trim()
+      if (!b64) return reject(new Error(`Window "${windowName}" not found or minimized`))
+      resolve(`data:image/jpeg;base64,${b64}`)
+    })
+  })
+}
 
 // ---- STT (Whisper) IPC ----
 
@@ -789,28 +826,60 @@ ipcMain.handle('skill-exec-script', (_event, { skillDir, interpreter, params }: 
 
 // ---- Proxy Fetch (bypass CORS for AI providers) ----
 
+// Node.js https fallback for when electron.net.fetch fails (DNS/TLS issues on Windows)
+function nodeFetch(url: string, options: { method?: string; headers?: Record<string, string>; body?: string }): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url)
+    const mod = parsed.protocol === 'https:' ? https : https
+    const req = mod.request(url, {
+      method: options.method || 'POST',
+      headers: options.headers,
+      timeout: 15000,
+    }, (res) => {
+      let data = ''
+      res.on('data', (chunk: string) => { data += chunk })
+      res.on('end', () => resolve({ status: res.statusCode || 0, body: data }))
+    })
+    req.on('error', (err) => reject(err))
+    req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')) })
+    if (options.body) req.write(options.body)
+    req.end()
+  })
+}
+
 const activeStreams = new Map<string, AbortController>()
 
 ipcMain.handle('proxy-fetch', async (_event, url: string, options: { method?: string; headers?: Record<string, string>; body?: string }) => {
   console.log('[Miru] proxy-fetch →', options.method || 'POST', url)
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 15000)
+
+  // Try electron.net.fetch first, fallback to Node.js https on failure
   try {
-    const res = await net.fetch(url, {
-      method: options.method || 'POST',
-      headers: options.headers,
-      body: options.body,
-      signal: controller.signal,
-    })
-    const body = await res.text()
-    console.log('[Miru] proxy-fetch ←', res.status, body.slice(0, 200))
-    return { status: res.status, body }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('[Miru] proxy-fetch error:', msg)
-    throw new Error(msg)
-  } finally {
-    clearTimeout(timeout)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15000)
+    try {
+      const res = await net.fetch(url, {
+        method: options.method || 'POST',
+        headers: options.headers,
+        body: options.body,
+        signal: controller.signal,
+      })
+      const body = await res.text()
+      console.log('[Miru] proxy-fetch ←', res.status, body.slice(0, 200))
+      return { status: res.status, body }
+    } finally {
+      clearTimeout(timeout)
+    }
+  } catch (netErr) {
+    console.warn('[Miru] net.fetch failed, trying Node.js https fallback:', (netErr as Error).message)
+    try {
+      const result = await nodeFetch(url, options)
+      console.log('[Miru] proxy-fetch (node) ←', result.status, result.body.slice(0, 200))
+      return result
+    } catch (nodeErr) {
+      const msg = (nodeErr as Error).message || String(nodeErr)
+      console.error('[Miru] proxy-fetch both paths failed:', msg)
+      throw new Error(msg)
+    }
   }
 })
 
@@ -818,6 +887,8 @@ ipcMain.handle('proxy-stream', async (event, url: string, options: { method?: st
   const streamId = Math.random().toString(36).slice(2, 10)
   const abortController = new AbortController()
 
+  // Try net.fetch first for streaming
+  let useNodeFallback = false
   try {
     const res = await net.fetch(url, {
       method: options.method || 'POST',
@@ -864,10 +935,74 @@ ipcMain.handle('proxy-stream', async (event, url: string, options: { method?: st
     }
 
     return { streamId }
-  } catch (err) {
-    activeStreams.delete(streamId)
-    return { error: (err as Error).message }
+  } catch (netErr) {
+    console.warn('[Miru] proxy-stream net.fetch failed, trying Node.js fallback:', (netErr as Error).message)
+    useNodeFallback = true
   }
+
+  // Node.js https fallback for streaming
+  if (useNodeFallback) {
+    try {
+      const parsed = new URL(url)
+      const mod = parsed.protocol === 'https:' ? https : https
+      const req = mod.request(url, {
+        method: options.method || 'POST',
+        headers: options.headers,
+      }, (res) => {
+        if (res.statusCode && res.statusCode >= 400) {
+          let errBody = ''
+          res.on('data', (chunk: string) => { errBody += chunk })
+          res.on('end', () => {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send('proxy-stream-error', streamId, `API error ${res.statusCode}: ${errBody}`)
+            }
+            activeStreams.delete(streamId)
+          })
+          return
+        }
+
+        activeStreams.set(streamId, abortController)
+
+        res.on('data', (chunk: Buffer) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('proxy-stream-data', streamId, chunk.toString('utf-8'))
+          }
+        })
+        res.on('end', () => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('proxy-stream-end', streamId)
+          }
+          activeStreams.delete(streamId)
+        })
+        res.on('error', (err) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('proxy-stream-error', streamId, err.message)
+          }
+          activeStreams.delete(streamId)
+        })
+      })
+
+      req.on('error', (err) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('proxy-stream-error', streamId, err.message)
+        }
+        activeStreams.delete(streamId)
+      })
+
+      // Handle abort
+      abortController.signal.addEventListener('abort', () => req.destroy())
+
+      if (options.body) req.write(options.body)
+      req.end()
+
+      return { streamId }
+    } catch (err) {
+      activeStreams.delete(streamId)
+      return { error: (err as Error).message }
+    }
+  }
+
+  return { error: 'Connection failed' }
 })
 
 ipcMain.handle('proxy-stream-abort', (_event, streamId: string) => {

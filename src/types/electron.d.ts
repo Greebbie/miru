@@ -53,22 +53,9 @@ export interface ElectronAPI {
     results: { title: string; snippet: string; url: string }[]
   }>
 
-  // Vision
-  visionInit: () => Promise<{ success: boolean; error?: string }>
-  visionAnalyze: () => Promise<{
-    detections: { label: string; confidence: number; bbox: [number, number, number, number] }[]
-    ocrText: string
-    summary: string
-  }>
-  visionStatus: () => Promise<{ initialized: boolean }>
-
-  // Vision: window-targeted
+  // Vision: window list & capture
   getWindowList: () => Promise<{ id: string; name: string }[]>
-  visionAnalyzeWindow: (windowName: string) => Promise<{
-    detections: { label: string; confidence: number; bbox: [number, number, number, number] }[]
-    ocrText: string
-    summary: string
-  }>
+  captureWindow: (windowName: string, options?: { width?: number; height?: number }) => Promise<string>
 
   // Skill Marketplace
   skillGetDir: () => Promise<string>

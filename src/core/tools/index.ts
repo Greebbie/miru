@@ -7,5 +7,6 @@ import './system'
 import './reminder'
 import './search'
 import './screen'
+import './automation'
 
 export { toolRegistry } from './registry'

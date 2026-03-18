@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createMockElectronAPI } from '@/test/helpers'
+import { useConfigStore } from '@/stores/configStore'
 
 // Mock isVisionCapable before importing screen tools
 vi.mock('@/core/ai/createProvider', () => ({
@@ -24,6 +25,8 @@ describe('screen tools', () => {
     mockAPI = createMockElectronAPI()
     ;(window as any).electronAPI = mockAPI
     mockedIsVisionCapable.mockReturnValue(true)
+    // Set visionTarget to fullscreen by default so describe_screen works
+    useConfigStore.setState({ visionTarget: 'fullscreen' })
   })
 
   // ─── get_active_window ──────────────────────────────────────────────
@@ -74,7 +77,6 @@ describe('screen tools', () => {
       }))
       mockAPI.getProcessList.mockResolvedValue(longList)
       const result = await toolRegistry.get('list_processes')!.execute({})
-      // The lines portion is sliced to 200 chars, but "50 apps: " prefix is added
       const linesStart = result.summary.indexOf(': ') + 2
       const linesPart = result.summary.slice(linesStart)
       expect(linesPart.length).toBeLessThanOrEqual(200)
@@ -83,46 +85,6 @@ describe('screen tools', () => {
     it('returns error on IPC failure', async () => {
       mockAPI.getProcessList.mockRejectedValue(new Error('ECONNREFUSED'))
       const result = await toolRegistry.get('list_processes')!.execute({})
-      expect(result.success).toBe(false)
-    })
-  })
-
-  // ─── analyze_screen ─────────────────────────────────────────────────
-
-  describe('analyze_screen', () => {
-    it('auto-initializes vision when not initialized', async () => {
-      mockAPI.visionStatus.mockResolvedValue({ initialized: false })
-      mockAPI.visionAnalyze.mockResolvedValue({
-        detections: [],
-        ocrText: 'Hello',
-        summary: 'OCR: Hello',
-      })
-
-      const result = await toolRegistry.get('analyze_screen')!.execute({})
-
-      expect(mockAPI.visionInit).toHaveBeenCalledTimes(1)
-      expect(mockAPI.visionAnalyze).toHaveBeenCalledTimes(1)
-      expect(result.success).toBe(true)
-      expect(result.summary).toBe('OCR: Hello')
-    })
-
-    it('skips init when already initialized', async () => {
-      mockAPI.visionStatus.mockResolvedValue({ initialized: true })
-      mockAPI.visionAnalyze.mockResolvedValue({
-        detections: [],
-        ocrText: 'Test',
-        summary: 'OCR: Test',
-      })
-
-      await toolRegistry.get('analyze_screen')!.execute({})
-
-      expect(mockAPI.visionInit).not.toHaveBeenCalled()
-      expect(mockAPI.visionAnalyze).toHaveBeenCalledTimes(1)
-    })
-
-    it('returns error on IPC failure', async () => {
-      mockAPI.visionStatus.mockRejectedValue(new Error('service unavailable'))
-      const result = await toolRegistry.get('analyze_screen')!.execute({})
       expect(result.success).toBe(false)
     })
   })
@@ -138,40 +100,35 @@ describe('screen tools', () => {
 
       expect(result.success).toBe(true)
       expect(result.data).toEqual({ _image: 'data:image/jpeg;base64,abc123' })
-      expect(result.summary).toBe('[截图已捕获]')
-      expect(mockAPI.visionAnalyze).not.toHaveBeenCalled()
+      expect(result.summary).toBe('[截图已捕获，等待 AI 分析]')
     })
 
-    it('falls back to YOLO+OCR when provider is not vision-capable', async () => {
-      mockedIsVisionCapable.mockReturnValue(false)
-      mockAPI.visionStatus.mockResolvedValue({ initialized: false })
-      mockAPI.visionAnalyze.mockResolvedValue({
-        detections: [{ label: 'button', confidence: 0.95, bbox: [0, 0, 50, 50] }],
-        ocrText: 'Click me',
-        summary: '1 object, OCR: Click me',
-      })
+    it('returns error when vision is off', async () => {
+      useConfigStore.setState({ visionTarget: 'off' })
 
       const result = await toolRegistry.get('describe_screen')!.execute({})
 
-      expect(mockAPI.visionInit).toHaveBeenCalledTimes(1)
-      expect(mockAPI.visionAnalyze).toHaveBeenCalledTimes(1)
-      expect(result.success).toBe(true)
-      expect(result.summary).toBe('1 object, OCR: Click me')
-      expect(mockAPI.captureScreenshot).not.toHaveBeenCalled()
+      expect(result.success).toBe(false)
+      expect(result.summary).toContain('视觉功能已关闭')
     })
 
-    it('skips vision init in fallback path when already initialized', async () => {
+    it('captures specific window when visionTarget is a window name', async () => {
+      useConfigStore.setState({ visionTarget: 'Chrome' })
+      mockAPI.captureWindow.mockResolvedValue('data:image/jpeg;base64,chrome123')
+
+      const result = await toolRegistry.get('describe_screen')!.execute({})
+
+      expect(result.success).toBe(true)
+      expect(mockAPI.captureWindow).toHaveBeenCalledWith('Chrome')
+    })
+
+    it('returns error when provider is not vision-capable', async () => {
       mockedIsVisionCapable.mockReturnValue(false)
-      mockAPI.visionStatus.mockResolvedValue({ initialized: true })
-      mockAPI.visionAnalyze.mockResolvedValue({
-        detections: [],
-        ocrText: '',
-        summary: 'nothing detected',
-      })
 
-      await toolRegistry.get('describe_screen')!.execute({})
+      const result = await toolRegistry.get('describe_screen')!.execute({})
 
-      expect(mockAPI.visionInit).not.toHaveBeenCalled()
+      expect(result.success).toBe(false)
+      expect(result.summary).toContain('不支持视觉')
     })
 
     it('returns error on IPC failure', async () => {
@@ -180,6 +137,39 @@ describe('screen tools', () => {
       const result = await toolRegistry.get('describe_screen')!.execute({})
       expect(result.success).toBe(false)
       expect(result.summary).toContain('permission')
+    })
+  })
+
+  // ─── describe_window ────────────────────────────────────────────────
+
+  describe('describe_window', () => {
+    it('returns _image data for specified window', async () => {
+      mockedIsVisionCapable.mockReturnValue(true)
+      mockAPI.captureWindow.mockResolvedValue('data:image/jpeg;base64,window123')
+
+      const result = await toolRegistry.get('describe_window')!.execute({ window_name: 'Chrome' })
+
+      expect(result.success).toBe(true)
+      expect(result.data).toEqual({ _image: 'data:image/jpeg;base64,window123' })
+      expect(mockAPI.captureWindow).toHaveBeenCalledWith('Chrome')
+    })
+
+    it('returns error when provider is not vision-capable', async () => {
+      mockedIsVisionCapable.mockReturnValue(false)
+
+      const result = await toolRegistry.get('describe_window')!.execute({ window_name: 'Chrome' })
+
+      expect(result.success).toBe(false)
+      expect(result.summary).toContain('不支持视觉')
+    })
+
+    it('returns error when window not found', async () => {
+      mockedIsVisionCapable.mockReturnValue(true)
+      mockAPI.captureWindow.mockRejectedValue(new Error('Window "FakeApp" not found'))
+
+      const result = await toolRegistry.get('describe_window')!.execute({ window_name: 'FakeApp' })
+
+      expect(result.success).toBe(false)
     })
   })
 
@@ -203,44 +193,25 @@ describe('screen tools', () => {
     })
   })
 
-  // ─── analyze_active_window ──────────────────────────────────────────
+  // ─── capture_window ─────────────────────────────────────────────────
 
-  describe('analyze_active_window', () => {
-    it('gets active window then analyzes it', async () => {
-      mockAPI.getActiveWindow.mockResolvedValue({ app: 'Notepad', title: 'readme.txt' })
-      mockAPI.visionStatus.mockResolvedValue({ initialized: true })
-      mockAPI.visionAnalyzeWindow.mockResolvedValue({
-        detections: [],
-        ocrText: 'file content',
-        summary: 'OCR: file content',
-      })
+  describe('capture_window', () => {
+    it('returns data URL for specified window', async () => {
+      mockAPI.captureWindow.mockResolvedValue('data:image/jpeg;base64,/9j/window')
 
-      const result = await toolRegistry.get('analyze_active_window')!.execute({})
+      const result = await toolRegistry.get('capture_window')!.execute({ window_name: 'Notepad' })
 
-      expect(mockAPI.getActiveWindow).toHaveBeenCalledTimes(1)
-      expect(mockAPI.visionAnalyzeWindow).toHaveBeenCalledWith('Notepad')
       expect(result.success).toBe(true)
-      expect(result.summary).toBe('Notepad: OCR: file content')
+      expect(result.data).toBe('data:image/jpeg;base64,/9j/window')
+      expect(result.summary).toBe('窗口 "Notepad" 截图完成')
+      expect(mockAPI.captureWindow).toHaveBeenCalledWith('Notepad')
     })
 
-    it('auto-initializes vision when not initialized', async () => {
-      mockAPI.getActiveWindow.mockResolvedValue({ app: 'Code', title: 'test.ts' })
-      mockAPI.visionStatus.mockResolvedValue({ initialized: false })
-      mockAPI.visionAnalyzeWindow.mockResolvedValue({
-        detections: [],
-        ocrText: 'code',
-        summary: 'OCR: code',
-      })
+    it('returns error when window not found', async () => {
+      mockAPI.captureWindow.mockRejectedValue(new Error('Window "FakeApp" not found'))
 
-      await toolRegistry.get('analyze_active_window')!.execute({})
+      const result = await toolRegistry.get('capture_window')!.execute({ window_name: 'FakeApp' })
 
-      expect(mockAPI.visionInit).toHaveBeenCalledTimes(1)
-      expect(mockAPI.visionAnalyzeWindow).toHaveBeenCalledWith('Code')
-    })
-
-    it('returns error on IPC failure', async () => {
-      mockAPI.getActiveWindow.mockRejectedValue(new Error('not found'))
-      const result = await toolRegistry.get('analyze_active_window')!.execute({})
       expect(result.success).toBe(false)
     })
   })
@@ -251,10 +222,10 @@ describe('screen tools', () => {
     const toolNames = [
       'get_active_window',
       'list_processes',
-      'analyze_screen',
       'describe_screen',
       'capture_screenshot',
-      'analyze_active_window',
+      'describe_window',
+      'capture_window',
     ] as const
 
     it.each(toolNames)('%s returns error when electronAPI is undefined', async (toolName) => {
@@ -262,7 +233,10 @@ describe('screen tools', () => {
       ;(window as any).electronAPI = undefined
 
       try {
-        const result = await toolRegistry.get(toolName)!.execute({})
+        const params = toolName === 'describe_window' || toolName === 'capture_window'
+          ? { window_name: 'test' }
+          : {}
+        const result = await toolRegistry.get(toolName)!.execute(params)
         expect(result.success).toBe(false)
         expect(result.data).toBeNull()
         expect(result.summary).toContain('Miru')
@@ -294,13 +268,6 @@ describe('screen tools', () => {
       const result = await toolRegistry.get('list_processes')!.execute({})
       expect(result.success).toBe(false)
       expect(result.summary).toContain('No response after a long wait')
-    })
-
-    it('provides fallback for unknown errors', async () => {
-      mockAPI.visionStatus.mockRejectedValue(new Error('bizarre_error'))
-      const result = await toolRegistry.get('analyze_screen')!.execute({})
-      expect(result.success).toBe(false)
-      expect(result.summary).toContain('Miru')
     })
   })
 })

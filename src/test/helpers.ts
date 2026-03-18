@@ -59,22 +59,11 @@ export function createMockElectronAPI(overrides?: Partial<Record<string, any>>) 
     }),
 
     // Vision
-    visionInit: vi.fn().mockResolvedValue({ success: true }),
-    visionAnalyze: vi.fn().mockResolvedValue({
-      detections: [{ label: 'button', confidence: 0.9, bbox: [10, 20, 100, 50] }],
-      ocrText: 'Hello World',
-      summary: '1 object detected, OCR: Hello World',
-    }),
-    visionStatus: vi.fn().mockResolvedValue({ initialized: false }),
     getWindowList: vi.fn().mockResolvedValue([
       { id: '1', name: 'Code' },
       { id: '2', name: 'Chrome' },
     ]),
-    visionAnalyzeWindow: vi.fn().mockResolvedValue({
-      detections: [],
-      ocrText: 'Window text',
-      summary: 'OCR: Window text',
-    }),
+    captureWindow: vi.fn().mockResolvedValue('data:image/jpeg;base64,/9j/window-mock'),
 
     // Skills
     skillGetDir: vi.fn().mockResolvedValue('C:\\Users\\test\\.miru\\skills'),
@@ -137,19 +126,6 @@ export function createMockElectronAPI(overrides?: Partial<Record<string, any>>) 
     ...overrides,
   }
   return api
-}
-
-export function createMockVisionResult(overrides?: Partial<{
-  detections: { label: string; confidence: number; bbox: [number, number, number, number] }[]
-  ocrText: string
-  summary: string
-}>) {
-  return {
-    detections: [{ label: 'button', confidence: 0.9, bbox: [10, 20, 100, 50] as [number, number, number, number] }],
-    ocrText: 'Hello World',
-    summary: '1 object detected, OCR: Hello World',
-    ...overrides,
-  }
 }
 
 export function createMockSTTResult(overrides?: Partial<{ text: string; error?: string }>) {

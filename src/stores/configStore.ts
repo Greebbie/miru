@@ -13,7 +13,7 @@ interface ConfigData {
   proactivity: number
   language: 'zh' | 'en' | 'auto'
   soundEnabled: boolean
-  visionEnabled: boolean
+  visionTarget: 'off' | 'fullscreen' | string  // 'off' | 'fullscreen' | window name
   ttsEnabled: boolean
   isOnboarded: boolean
   userName: string
@@ -36,6 +36,8 @@ interface ConfigState extends ConfigData {
   setPersonality: (key: 'verbosity' | 'formality' | 'proactivity', value: number) => void
   setLanguage: (lang: 'zh' | 'en' | 'auto') => void
   setSoundEnabled: (enabled: boolean) => void
+  setVisionTarget: (target: 'off' | 'fullscreen' | string) => void
+  /** @deprecated use setVisionTarget */
   setVisionEnabled: (enabled: boolean) => void
   setTtsEnabled: (enabled: boolean) => void
   setOnboarded: (onboarded: boolean) => void
@@ -60,7 +62,7 @@ function extractData(state: ConfigState): ConfigData {
     proactivity: state.proactivity,
     language: state.language,
     soundEnabled: state.soundEnabled,
-    visionEnabled: state.visionEnabled,
+    visionTarget: state.visionTarget,
     ttsEnabled: state.ttsEnabled,
     isOnboarded: state.isOnboarded,
     userName: state.userName,
@@ -88,7 +90,7 @@ export const useConfigStore = create<ConfigState>((set) => ({
   proactivity: 0.3,
   language: 'zh',
   soundEnabled: false,
-  visionEnabled: false,
+  visionTarget: 'off',
   ttsEnabled: false,
   isOnboarded: false,
   userName: '',
@@ -101,8 +103,13 @@ export const useConfigStore = create<ConfigState>((set) => ({
 
   init: async () => {
     try {
-      const saved = await window.electronAPI?.storeGet('config') as Partial<ConfigData> | undefined
+      const saved = await window.electronAPI?.storeGet('config') as Partial<ConfigData & { visionEnabled?: boolean }> | undefined
       if (saved) {
+        // Migrate old visionEnabled boolean → visionTarget
+        if ('visionEnabled' in saved && !('visionTarget' in saved)) {
+          (saved as any).visionTarget = saved.visionEnabled ? 'fullscreen' : 'off'
+          delete (saved as any).visionEnabled
+        }
         set({ ...saved, isLoading: false })
       } else {
         set({ isLoading: false })
@@ -120,7 +127,8 @@ export const useConfigStore = create<ConfigState>((set) => ({
   setPersonality: (key, value) => { set({ [key]: Math.max(0, Math.min(1, value)) }); persistConfig() },
   setLanguage: (language) => { set({ language }); persistConfig() },
   setSoundEnabled: (soundEnabled) => { set({ soundEnabled }); persistConfig() },
-  setVisionEnabled: (visionEnabled) => { set({ visionEnabled }); persistConfig() },
+  setVisionTarget: (visionTarget) => { set({ visionTarget }); persistConfig() },
+  setVisionEnabled: (enabled) => { set({ visionTarget: enabled ? 'fullscreen' : 'off' }); persistConfig() },
   setTtsEnabled: (ttsEnabled) => { set({ ttsEnabled }); persistConfig() },
   setOnboarded: (isOnboarded) => { set({ isOnboarded }); persistConfig() },
   setUserName: (userName) => { set({ userName }); persistConfig() },

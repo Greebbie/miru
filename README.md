@@ -90,10 +90,8 @@ Layered vision — pay only for what you need:
 | Layer | What | Cost |
 |-------|------|------|
 | **0** | Window title via OS API | Free |
-| **0.5** | On-screen text via local OCR (Tesseract) — no AI API call | Free |
 | **1** | Compressed screenshot (640x360) sent to AI | ~200 tokens |
-| **2** | Active window region only | ~400 tokens |
-| **3** | Full-screen Computer Use | ~800+ tokens/step |
+| **2** | Active window capture sent to AI | ~400 tokens |
 
 Miru tells you the cost before using vision. You can always describe what you see in text instead.
 
@@ -157,7 +155,7 @@ Most AI desktop tools send every interaction through the LLM — even trivial on
 ```
 "Open Chrome"          → local regex match    → zero tokens
 "Delete old downloads" → local parse + confirm → zero tokens
-"What's on my screen?" → local OCR (Tesseract) → zero tokens
+"What time is it?"     → local match            → zero tokens
 "Help me organize my project files"  → AI needed → ~1000 tokens
 ```
 
@@ -181,7 +179,7 @@ Typical interaction: **~1000 tokens total (~$0.003 on Claude Sonnet)**
 Electron Main Process (thin OS shell)
 ├── Window management (transparent, always-on-top, click-through)
 ├── IPC handlers (files, shell, clipboard, system info)
-├── Vision worker (YOLO + Tesseract in worker_threads)
+├── Vision (LLM-based screenshot analysis)
 ├── Memory DB (better-sqlite3 with FTS5 full-text search)
 ├── Monitor (active window polling + change detection)
 └── Automation (SendKeys, window focusing)
@@ -214,12 +212,9 @@ miru/
 ├── electron/                  # Main process
 │   ├── main.ts               # Window + IPC handlers
 │   ├── preload.ts            # Context bridge (renderer ↔ main)
-│   ├── vision.ts             # Vision worker communication layer
-│   ├── vision-worker.ts      # YOLO + OCR in isolated worker_threads
 │   ├── memory-db.ts          # SQLite schema + FTS5 + IPC
 │   ├── monitor.ts            # Active window change polling
-│   ├── automation.ts         # SendKeys + window focus (Windows)
-│   └── models.ts             # ONNX model downloader
+│   └── automation.ts         # SendKeys + window focus (Windows)
 ├── src/
 │   ├── core/
 │   │   ├── ai/               # Multi-provider AI abstraction
@@ -264,7 +259,7 @@ Skills are tools you teach Miru. It's good at using them, but it lets you pick w
 - [x] Multi-provider AI support (7 providers)
 - [x] Local command parser (zero-token operations)
 - [x] Three-layer memory with SQLite + FTS5 full-text search
-- [x] Vision system (YOLO object detection + Tesseract OCR)
+- [x] Vision system (LLM-based screenshot analysis)
 - [x] Admin panel (tool permissions, window monitoring, auto-reply, audit logs)
 - [ ] Voice interaction (STT / TTS)
 - [ ] Skill store + community skills

@@ -8,10 +8,11 @@ import { VLLMProvider } from './vllm'
 import { QwenProvider } from './qwen'
 import { MinimaxProvider } from './minimax'
 
-const VISION_PROVIDERS = new Set(['claude', 'openai', 'qwen', 'ollama'])
+// Blacklist mode: only providers known to lack vision support need OCR fallback
+const NON_VISION_PROVIDERS = new Set(['vllm'])
 
 export function isVisionCapable(): boolean {
-  return VISION_PROVIDERS.has(useConfigStore.getState().provider)
+  return !NON_VISION_PROVIDERS.has(useConfigStore.getState().provider)
 }
 
 export function createProvider(): AIProvider | null {

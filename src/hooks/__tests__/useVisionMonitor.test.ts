@@ -22,6 +22,7 @@ vi.mock('@/core/skills/executor', () => ({
 
 vi.mock('@/core/ai/createProvider', () => ({
   createProvider: vi.fn().mockReturnValue(null),
+  isVisionCapable: vi.fn().mockReturnValue(false),
 }))
 
 vi.mock('@/i18n/useI18n', () => ({
@@ -58,28 +59,18 @@ function makeMonitorRule(overrides?: {
   }
 }
 
-function makeAutoReplyRule(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'ar-1',
-    name: 'Auto Reply Test',
-    enabled: true,
-    app: 'wechat' as const,
-    triggerKeywords: ['hello', 'help'],
-    replyTemplate: 'I am busy',
-    useAI: false,
-    requireConfirm: false,
-    ...overrides,
-  }
-}
-
 /** Advance fake timers and flush all pending microtasks (promises) */
 async function advanceAndFlush(ms: number) {
   await vi.advanceTimersByTimeAsync(ms)
 }
 
+/** Counter for generating unique screenshot data URLs */
+let screenshotCounter = 0
+
 describe('useVisionMonitor', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    screenshotCounter = 0
 
     // Reset stores to clean state
     useChatStore.setState({ messages: [] })
@@ -88,20 +79,17 @@ describe('useVisionMonitor', () => {
       autoReplyRules: [],
     })
 
-    // Reset electronAPI mocks
+    // Reset electronAPI mocks — now uses captureScreenshot/captureWindow instead of visionAnalyze
     const api = window.electronAPI!
-    vi.mocked(api.visionStatus).mockResolvedValue({ initialized: true })
-    vi.mocked(api.visionAnalyze).mockResolvedValue({
-      detections: [],
-      ocrText: '',
-      summary: '',
+    vi.mocked(api.captureScreenshot).mockImplementation(async () => {
+      screenshotCounter++
+      return `data:image/jpeg;base64,screenshot_${screenshotCounter}`
     })
-    vi.mocked(api.visionAnalyzeWindow).mockResolvedValue({
-      detections: [],
-      ocrText: '',
-      summary: '',
+    vi.mocked(api.captureWindow).mockImplementation(async () => {
+      screenshotCounter++
+      return `data:image/jpeg;base64,window_${screenshotCounter}`
     })
-    vi.mocked(api.visionInit).mockResolvedValue({ success: true })
+    vi.mocked(api.getActiveWindow).mockResolvedValue({ app: 'Test', title: 'test window' })
     vi.mocked(api.clipboardWrite).mockClear()
     vi.mocked(api.focusWindow).mockClear()
     vi.mocked(api.sendKeys).mockClear()
@@ -160,63 +148,25 @@ describe('useVisionMonitor', () => {
     })
   })
 
-  // ---- Vision init ----
+  // ---- Screenshot-based change detection ----
 
-  describe('auto-init on monitor start', () => {
-    it('calls visionInit() if not initialized', async () => {
-      const api = window.electronAPI!
-      vi.mocked(api.visionStatus).mockResolvedValue({ initialized: false })
-
-      useAdminStore.setState({
-        monitorRules: [makeMonitorRule()],
-      })
-
-      startVisionMonitor()
-
-      // Let the async initVisionIfNeeded resolve
-      await advanceAndFlush(0)
-
-      expect(api.visionInit).toHaveBeenCalled()
-    })
-
-    it('does not call visionInit() if already initialized', async () => {
-      const api = window.electronAPI!
-      vi.mocked(api.visionStatus).mockResolvedValue({ initialized: true })
-      vi.mocked(api.visionInit).mockClear()
-
-      useAdminStore.setState({
-        monitorRules: [makeMonitorRule()],
-      })
-
-      startVisionMonitor()
-      await advanceAndFlush(0)
-
-      expect(api.visionInit).not.toHaveBeenCalled()
-    })
-  })
-
-  // ---- computeNewContent behavior (tested via poll cycle) ----
-
-  describe('computeNewContent behavior via poll cycle', () => {
-    it('when old and new text are the same, no action is triggered', async () => {
+  describe('screenshot change detection', () => {
+    it('no action triggered when screenshots are identical', async () => {
       const api = window.electronAPI!
 
       useAdminStore.setState({
         monitorRules: [makeMonitorRule({ trigger: { pattern: '.*' } })],
       })
 
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'line one\nline two',
-        summary: '',
-      })
+      // Return same screenshot every time
+      vi.mocked(api.captureScreenshot).mockResolvedValue('data:image/jpeg;base64,same')
 
       startVisionMonitor()
 
-      // First poll — sets initial snapshot, no trigger (prevText empty)
+      // First poll — sets initial snapshot, no trigger
       await advanceAndFlush(POLL_MS)
 
-      // Second poll — same text, no new content
+      // Second poll — same screenshot, no change
       await advanceAndFlush(POLL_MS)
 
       // Verify no notify message was added (beyond the initial start message)
@@ -225,32 +175,20 @@ describe('useVisionMonitor', () => {
       expect(notifyMessages).toHaveLength(0)
     })
 
-    it('when new text has additional lines, those new lines trigger rules', async () => {
-      const api = window.electronAPI!
-
+    it('wildcard pattern .* triggers on any screenshot change', async () => {
       useAdminStore.setState({
         monitorRules: [makeMonitorRule({ trigger: { pattern: '.*' } })],
       })
 
-      // First poll — initial snapshot
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'line one',
-        summary: '',
-      })
-
+      // Each call returns unique screenshot (via counter in beforeEach)
       startVisionMonitor()
+
+      // First poll — initial snapshot
       await advanceAndFlush(POLL_MS)
 
-      // Second poll — new line added
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'line one\nline two added',
-        summary: '',
-      })
+      // Second poll — different screenshot triggers action
       await advanceAndFlush(POLL_MS)
 
-      // The rule action is 'notify', so it adds a chat message
       const messages = useChatStore.getState().messages
       const notifyMessages = messages.filter(m => m.content.includes('Detected:'))
       expect(notifyMessages.length).toBeGreaterThan(0)
@@ -261,8 +199,6 @@ describe('useVisionMonitor', () => {
 
   describe('checkCooldown behavior', () => {
     it('a rule that just fired should not fire again within cooldown', async () => {
-      const api = window.electronAPI!
-
       useAdminStore.setState({
         monitorRules: [makeMonitorRule({
           cooldownMs: 60000,
@@ -270,48 +206,27 @@ describe('useVisionMonitor', () => {
         })],
       })
 
-      // First poll — initial snapshot
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'initial',
-        summary: '',
-      })
       startVisionMonitor()
+
+      // First poll — initial snapshot
       await advanceAndFlush(POLL_MS)
 
-      // Second poll — triggers rule (first real content change)
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'initial\nnew content A',
-        summary: '',
-      })
+      // Second poll — triggers rule (first real change)
       await advanceAndFlush(POLL_MS)
 
       const messagesAfterFirst = useChatStore.getState().messages.filter(m => m.content.includes('Detected:'))
       expect(messagesAfterFirst).toHaveLength(1)
 
-      // Third poll — new content again but within cooldown (10s since trigger, cooldown is 60s)
-      // Return same text to consume the new snapshot without triggering
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'initial\nnew content A',
-        summary: '',
-      })
+      // Third poll — new change but within cooldown
       await advanceAndFlush(POLL_MS)
 
       const messagesAfterSecond = useChatStore.getState().messages.filter(m => m.content.includes('Detected:'))
       expect(messagesAfterSecond).toHaveLength(1) // still 1, cooldown not expired
 
-      // Advance past the cooldown (60s from trigger at ~20s, so we need to reach ~80s)
-      // We are currently at ~30s. Advance 50s to reach ~80s. Keep returning same text.
+      // Advance past cooldown
       await advanceAndFlush(50000)
 
-      // Now we're past cooldown. Introduce new content on the next poll.
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'initial\nnew content A\nnew content C',
-        summary: '',
-      })
+      // Now past cooldown, next poll triggers again
       await advanceAndFlush(POLL_MS)
 
       const messagesAfterCooldown = useChatStore.getState().messages.filter(m => m.content.includes('Detected:'))
@@ -319,291 +234,34 @@ describe('useVisionMonitor', () => {
     })
   })
 
-  // ---- Rule pattern matching ----
-
-  describe('rule pattern matching', () => {
-    it('regex pattern matching triggers action', async () => {
-      const api = window.electronAPI!
-
-      useAdminStore.setState({
-        monitorRules: [makeMonitorRule({ trigger: { pattern: 'error|fail' } })],
-      })
-
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'all good',
-        summary: '',
-      })
-      startVisionMonitor()
-      await advanceAndFlush(POLL_MS)
-
-      // New content with "error" in it
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'all good\nSome error occurred',
-        summary: '',
-      })
-      await advanceAndFlush(POLL_MS)
-
-      const notifyMessages = useChatStore.getState().messages.filter(m => m.content.includes('Detected:'))
-      expect(notifyMessages.length).toBeGreaterThan(0)
-    })
-
-    it('wildcard pattern .* matches everything', async () => {
-      const api = window.electronAPI!
-
-      useAdminStore.setState({
-        monitorRules: [makeMonitorRule({ trigger: { pattern: '.*' } })],
-      })
-
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'first',
-        summary: '',
-      })
-      startVisionMonitor()
-      await advanceAndFlush(POLL_MS)
-
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'first\nanything here',
-        summary: '',
-      })
-      await advanceAndFlush(POLL_MS)
-
-      const notifyMessages = useChatStore.getState().messages.filter(m => m.content.includes('Detected:'))
-      expect(notifyMessages.length).toBeGreaterThan(0)
-    })
-
-    it('case-insensitive matching works', async () => {
-      const api = window.electronAPI!
-
-      useAdminStore.setState({
-        monitorRules: [makeMonitorRule({ trigger: { pattern: 'ERROR' } })],
-      })
-
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'start',
-        summary: '',
-      })
-      startVisionMonitor()
-      await advanceAndFlush(POLL_MS)
-
-      // lowercase "error" should match pattern "ERROR" (regex 'i' flag)
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'start\nsome error here',
-        summary: '',
-      })
-      await advanceAndFlush(POLL_MS)
-
-      const notifyMessages = useChatStore.getState().messages.filter(m => m.content.includes('Detected:'))
-      expect(notifyMessages.length).toBeGreaterThan(0)
-    })
-
-    it('invalid regex falls back to string includes', async () => {
-      const api = window.electronAPI!
-
-      // "[invalid" is an invalid regex
-      useAdminStore.setState({
-        monitorRules: [makeMonitorRule({ trigger: { pattern: '[invalid' } })],
-      })
-
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'first',
-        summary: '',
-      })
-      startVisionMonitor()
-      await advanceAndFlush(POLL_MS)
-
-      // The string "[invalid" should be matched via includes (case-insensitive)
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'first\ncontains [invalid here',
-        summary: '',
-      })
-      await advanceAndFlush(POLL_MS)
-
-      const notifyMessages = useChatStore.getState().messages.filter(m => m.content.includes('Detected:'))
-      expect(notifyMessages.length).toBeGreaterThan(0)
-    })
-
-    it('no match when pattern does not appear in new content', async () => {
-      const api = window.electronAPI!
-
-      useAdminStore.setState({
-        monitorRules: [makeMonitorRule({ trigger: { pattern: 'CRITICAL_FAILURE' } })],
-      })
-
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'line1',
-        summary: '',
-      })
-      startVisionMonitor()
-      await advanceAndFlush(POLL_MS)
-
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'line1\nsome normal text',
-        summary: '',
-      })
-      await advanceAndFlush(POLL_MS)
-
-      const notifyMessages = useChatStore.getState().messages.filter(m => m.content.includes('Detected:'))
-      expect(notifyMessages).toHaveLength(0)
-    })
-  })
-
-  // ---- Auto-reply keyword detection ----
-
-  describe('auto-reply keyword detection', () => {
-    it('keywords in new OCR text trigger auto-reply', async () => {
-      const api = window.electronAPI!
-
-      const arRule = makeAutoReplyRule({
-        app: 'wechat',
-        triggerKeywords: ['hello'],
-        replyTemplate: 'I am busy',
-      })
-      useAdminStore.setState({
-        monitorRules: [],
-        autoReplyRules: [arRule],
-      })
-
-      vi.mocked(api.visionAnalyzeWindow).mockResolvedValue({
-        detections: [],
-        ocrText: 'initial chat',
-        summary: '',
-      })
-      startVisionMonitor()
-      await advanceAndFlush(POLL_MS)
-
-      // New content includes keyword "hello"
-      vi.mocked(api.visionAnalyzeWindow).mockResolvedValue({
-        detections: [],
-        ocrText: 'initial chat\nhello there',
-        summary: '',
-      })
-      await advanceAndFlush(POLL_MS)
-
-      expect(api.clipboardWrite).toHaveBeenCalledWith('I am busy')
-    })
-
-    it('keywords are case-insensitive', async () => {
-      const api = window.electronAPI!
-
-      const arRule = makeAutoReplyRule({
-        app: 'wechat',
-        triggerKeywords: ['HELP'],
-        replyTemplate: 'Wait a moment',
-      })
-      useAdminStore.setState({
-        monitorRules: [],
-        autoReplyRules: [arRule],
-      })
-
-      vi.mocked(api.visionAnalyzeWindow).mockResolvedValue({
-        detections: [],
-        ocrText: 'old text',
-        summary: '',
-      })
-      startVisionMonitor()
-      await advanceAndFlush(POLL_MS)
-
-      // lowercase "help" should match keyword "HELP"
-      vi.mocked(api.visionAnalyzeWindow).mockResolvedValue({
-        detections: [],
-        ocrText: 'old text\ncan you help me?',
-        summary: '',
-      })
-      await advanceAndFlush(POLL_MS)
-
-      expect(api.clipboardWrite).toHaveBeenCalledWith('Wait a moment')
-    })
-
-    it('no match when keywords do not appear in new content', async () => {
-      const api = window.electronAPI!
-      vi.mocked(api.clipboardWrite).mockClear()
-
-      const arRule = makeAutoReplyRule({
-        app: 'wechat',
-        triggerKeywords: ['urgent'],
-        replyTemplate: 'On it',
-      })
-      useAdminStore.setState({
-        monitorRules: [],
-        autoReplyRules: [arRule],
-      })
-
-      vi.mocked(api.visionAnalyzeWindow).mockResolvedValue({
-        detections: [],
-        ocrText: 'old text',
-        summary: '',
-      })
-      startVisionMonitor()
-      await advanceAndFlush(POLL_MS)
-
-      vi.mocked(api.visionAnalyzeWindow).mockResolvedValue({
-        detections: [],
-        ocrText: 'old text\njust a normal message',
-        summary: '',
-      })
-      await advanceAndFlush(POLL_MS)
-
-      expect(api.clipboardWrite).not.toHaveBeenCalled()
-    })
-  })
-
   // ---- Window-specific polling ----
 
   describe('window-specific polling', () => {
-    it('uses visionAnalyzeWindow for rules targeting a specific app', async () => {
+    it('uses captureWindow for rules targeting a specific app', async () => {
       const api = window.electronAPI!
 
       useAdminStore.setState({
         monitorRules: [makeMonitorRule({ trigger: { pattern: '.*', app: 'Chrome' } })],
       })
 
-      vi.mocked(api.visionAnalyzeWindow).mockResolvedValue({
-        detections: [],
-        ocrText: 'page one',
-        summary: '',
-      })
       startVisionMonitor()
       await advanceAndFlush(POLL_MS)
 
-      vi.mocked(api.visionAnalyzeWindow).mockResolvedValue({
-        detections: [],
-        ocrText: 'page one\nnew stuff',
-        summary: '',
-      })
-      await advanceAndFlush(POLL_MS)
-
-      expect(api.visionAnalyzeWindow).toHaveBeenCalledWith('Chrome')
-      const notifyMessages = useChatStore.getState().messages.filter(m => m.content.includes('Detected:'))
-      expect(notifyMessages.length).toBeGreaterThan(0)
+      expect(api.captureWindow).toHaveBeenCalledWith('Chrome')
     })
 
-    it('uses visionAnalyze (fullscreen) when app is empty', async () => {
+    it('uses captureScreenshot (fullscreen) when app is empty', async () => {
       const api = window.electronAPI!
-      vi.mocked(api.visionAnalyze).mockClear()
+      vi.mocked(api.captureScreenshot).mockClear()
 
       useAdminStore.setState({
         monitorRules: [makeMonitorRule({ trigger: { pattern: '.*' } })],
       })
 
-      vi.mocked(api.visionAnalyze).mockResolvedValue({
-        detections: [],
-        ocrText: 'screen',
-        summary: '',
-      })
       startVisionMonitor()
       await advanceAndFlush(POLL_MS)
 
-      expect(api.visionAnalyze).toHaveBeenCalled()
+      expect(api.captureScreenshot).toHaveBeenCalled()
     })
   })
 })

@@ -49,6 +49,15 @@ const descriptions: Record<string, (params: Record<string, unknown>, l: 'zh' | '
   'clipboard-write': (_p, l) => {
     return l === 'zh' ? '写入剪贴板' : 'Write to clipboard'
   },
+  'send_message_to_app': (p, l) => {
+    const app = String(p.app || '')
+    const msg = String(p.message || '').slice(0, 50)
+    return l === 'zh' ? `在 ${app} 中发送消息: "${msg}${(p.message as string || '').length > 50 ? '...' : ''}"` : `Send message in ${app}: "${msg}"`
+  },
+  'type_in_app': (p, l) => {
+    const app = String(p.app || '')
+    return l === 'zh' ? `在 ${app} 中输入文字（不发送）` : `Type text in ${app} (without sending)`
+  },
 }
 
 export function describeToolAction(

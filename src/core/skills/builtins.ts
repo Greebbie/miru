@@ -349,15 +349,15 @@ export function registerBuiltinSkills() {
     },
   })
 
-  // Screen Reader
+  // Screen Reader — now uses LLM Vision via describe_screen tool
   skillRegistry.register({
     id: 'screen_reader',
     name: '\u5C4F\u5E55\u9605\u8BFB',
     nameEn: 'Screen Reader',
     icon: '\uD83D\uDC41\uFE0F',
     category: 'system',
-    description: 'Read screen content via OCR',
-    keywords: ['\u770B\u5C4F\u5E55', '\u8BFB\u5C4F\u5E55', 'screen', 'read', 'ocr', '\u5C4F\u5E55\u9605\u8BFB'],
+    description: 'Capture screen for AI to describe',
+    keywords: ['\u770B\u5C4F\u5E55', '\u8BFB\u5C4F\u5E55', 'screen', 'read', '\u5C4F\u5E55\u9605\u8BFB'],
     aiInvocable: true,
     execute: async () => {
       useChatStore.getState().addMessage({
@@ -366,20 +366,15 @@ export function registerBuiltinSkills() {
       })
 
       try {
-        const visionResult = await window.electronAPI.visionAnalyze()
-        const text = visionResult.ocrText || visionResult.summary || '\u6CA1\u6709\u8BC6\u522B\u5230\u6587\u5B57'
-        const detections = visionResult.detections?.length
-          ? `\n\n\u68C0\u6D4B\u5230: ${visionResult.detections.map(d => d.label).join(', ')}`
-          : ''
-
+        await window.electronAPI.captureScreenshot()
         useChatStore.getState().addMessage({
           role: 'assistant',
-          content: `\uD83D\uDC41\uFE0F **\u5C4F\u5E55\u5185\u5BB9:**\n\n${text}${detections}`,
+          content: '\uD83D\uDC41\uFE0F \u5DF2\u622A\u53D6\u5C4F\u5E55\uFF0C\u8BF7\u7528 describe_screen \u5DE5\u5177\u8BA9 AI \u5206\u6790',
         })
       } catch {
         useChatStore.getState().addMessage({
           role: 'assistant',
-          content: '\u5594...\u6CA1\u80FD\u8BFB\u53D6\u5C4F\u5E55\uFF0C\u53EF\u80FD\u89C6\u89C9\u6A21\u5757\u8FD8\u6CA1\u521D\u59CB\u5316',
+          content: '\u5594...\u6CA1\u80FD\u622A\u53D6\u5C4F\u5E55',
         })
       }
     },

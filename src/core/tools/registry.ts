@@ -5,7 +5,7 @@ export interface ToolDefinition {
   description: string // MAX 15 words
   parameters: Record<string, unknown>
   riskLevel: 'low' | 'medium' | 'high'
-  category?: 'files' | 'apps' | 'system' | 'clipboard' | 'search' | 'screen'
+  category?: 'files' | 'apps' | 'system' | 'clipboard' | 'search' | 'screen' | 'automation'
   execute: (params: Record<string, unknown>) => Promise<ToolResult>
 }
 

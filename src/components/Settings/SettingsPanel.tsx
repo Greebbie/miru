@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useConfigStore, type AIProviderType } from '@/stores/configStore'
 import { testConnection } from '@/core/ai/testConnection'
 import { humanizeError } from '@/core/errors/humanize'
+import { isVisionCapable } from '@/core/ai/createProvider'
 import { useI18n } from '@/i18n/useI18n'
 import MemoryViewer from './MemoryViewer'
 
@@ -290,12 +291,34 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                 <Toggle value={config.ttsEnabled} onChange={() => config.setTtsEnabled(!config.ttsEnabled)} />
               </div>
 
-              {/* ── Vision (YOLO + OCR) ── */}
+              {/* ── Vision (LLM) ── */}
               <FeatureSection
-                title={lang === 'zh' ? '视觉分析 (YOLO + OCR)' : 'Vision (YOLO + OCR)'}
-                description={lang === 'zh' ? '下载 ~13MB 模型后可用' : 'Download ~13MB model to enable'}
+                title={lang === 'zh' ? '\u89C6\u89C9\u529F\u80FD / Vision' : 'Vision'}
+                description={lang === 'zh' ? '\u5141\u8BB8 Miru \u67E5\u770B\u5C4F\u5E55\u5185\u5BB9\uFF08\u9700\u8981\u652F\u6301\u89C6\u89C9\u7684 AI \u6A21\u578B\uFF09' : 'Allow Miru to see screen content (requires vision-capable AI model)'}
               >
-                <VisionSetup lang={lang} />
+                {!isVisionCapable() && (
+                  <p className="text-[10px] text-yellow-400/80 mb-1.5">
+                    {lang === 'zh' ? '\u26A0 \u5F53\u524D\u6A21\u578B\u4E0D\u652F\u6301\u89C6\u89C9' : '\u26A0 Current model does not support vision'}
+                  </p>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-white/50">{lang === 'zh' ? '\u542F\u7528\u89C6\u89C9' : 'Enable vision'}</span>
+                  <Toggle value={config.visionTarget !== 'off'} onChange={() => config.setVisionTarget(config.visionTarget === 'off' ? 'fullscreen' : 'off')} />
+                </div>
+                {config.visionTarget !== 'off' && (
+                  <p className="text-[10px] text-white/30 mt-1">
+                    {lang === 'zh' ? '\u5F53\u524D\u6A21\u5F0F: ' : 'Current mode: '}
+                    <span className={config.visionTarget === 'fullscreen' ? 'text-blue-400' : 'text-green-400'}>
+                      {config.visionTarget === 'fullscreen'
+                        ? (lang === 'zh' ? '\u5168\u5C4F' : 'Fullscreen')
+                        : config.visionTarget}
+                    </span>
+                    {' '}
+                    <span className="text-white/20">
+                      ({lang === 'zh' ? '\u5728\u804A\u5929\u7A97\u53E3\u70B9\u51FB\u773C\u775B\u56FE\u6807\u5207\u6362' : 'Click eye icon in chat to change'})
+                    </span>
+                  </p>
+                )}
               </FeatureSection>
 
               {/* ── STT (Whisper) ── */}
@@ -370,79 +393,6 @@ function FeatureSection({ title, description, children }: { title: string; descr
 function StatusDot({ status }: { status: 'ready' | 'loading' | 'error' | 'idle' }) {
   const colors = { ready: 'bg-green-400', loading: 'bg-yellow-400 animate-pulse', error: 'bg-red-400', idle: 'bg-white/20' }
   return <span className={`inline-block w-1.5 h-1.5 rounded-full ${colors[status]}`} />
-}
-
-function VisionSetup({ lang }: { lang: string }) {
-  const config = useConfigStore()
-  const [status, setStatus] = useState<'checking' | 'not-downloaded' | 'downloading' | 'ready' | 'error'>('checking')
-  const [errorMsg, setErrorMsg] = useState('')
-
-  useEffect(() => {
-    let cancelled = false
-    window.electronAPI?.visionStatus().then((s) => {
-      if (!cancelled) setStatus(s.initialized ? 'ready' : 'not-downloaded')
-    }).catch(() => {
-      if (!cancelled) setStatus('not-downloaded')
-    })
-    return () => { cancelled = true }
-  }, [])
-
-  const handleDownload = async () => {
-    setStatus('downloading')
-    setErrorMsg('')
-    try {
-      const result = await window.electronAPI?.visionInit()
-      if (result && !result.success) {
-        setStatus('error')
-        setErrorMsg(result.error || 'Init failed')
-        return
-      }
-      setStatus('ready')
-      // Auto-enable vision after successful download
-      useConfigStore.getState().setVisionEnabled(true)
-    } catch (err) {
-      setStatus('error')
-      setErrorMsg(err instanceof Error ? err.message : String(err))
-    }
-  }
-
-  const dotStatus = status === 'ready' ? 'ready' as const
-    : status === 'downloading' ? 'loading' as const
-    : status === 'error' ? 'error' as const
-    : 'idle' as const
-
-  const statusText: Record<string, string> = {
-    checking: lang === 'zh' ? '检查中...' : 'Checking...',
-    'not-downloaded': lang === 'zh' ? '未下载' : 'Not downloaded',
-    downloading: lang === 'zh' ? '下载中...' : 'Downloading...',
-    ready: lang === 'zh' ? '已就绪' : 'Ready',
-    error: lang === 'zh' ? '下载失败' : 'Download failed',
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <StatusDot status={dotStatus} />
-          <span className="text-[10px] text-white/50">{statusText[status]}</span>
-        </div>
-        {status === 'ready' && (
-          <Toggle value={config.visionEnabled} onChange={() => config.setVisionEnabled(!config.visionEnabled)} />
-        )}
-      </div>
-      {(status === 'not-downloaded' || status === 'error') && (
-        <button
-          onClick={handleDownload}
-          className="w-full px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/30 text-white hover:bg-blue-500/50 transition-colors"
-        >
-          {lang === 'zh' ? '下载模型 (~13MB)' : 'Download Model (~13MB)'}
-        </button>
-      )}
-      {status === 'error' && errorMsg && (
-        <p className="text-[10px] text-red-400/80">{errorMsg.slice(0, 100)}</p>
-      )}
-    </div>
-  )
 }
 
 function STTSetup({ lang }: { lang: string }) {

@@ -13,7 +13,6 @@ function buildWorkers() {
       if (built) return
       built = true
       const workers = [
-        { entry: 'electron/vision-worker.ts', out: 'vision-worker.cjs', external: ['onnxruntime-node', 'sharp', 'tesseract.js'] },
         { entry: 'electron/stt-worker.ts', out: 'stt-worker.cjs', external: ['@huggingface/transformers'] },
       ]
       for (const w of workers) {
@@ -48,7 +47,7 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['better-sqlite3', 'electron-store', 'onnxruntime-node', 'sharp', 'tesseract.js', 'worker_threads', '@huggingface/transformers'],
+              external: ['better-sqlite3', 'electron-store', 'worker_threads', '@huggingface/transformers'],
             },
           },
         },

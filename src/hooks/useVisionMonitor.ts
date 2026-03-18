@@ -1,6 +1,9 @@
 /**
- * Vision Monitor Engine — polls target windows via OCR, detects content changes,
+ * Vision Monitor Engine — polls target windows via screenshots, detects content changes,
  * and triggers actions based on MonitorRule / AutoReplyRule patterns.
+ *
+ * Uses LLM Vision for content analysis when screenshots change.
+ * Falls back to window title monitoring when provider doesn't support vision.
  *
  * This is a pure module (not a React hook). Call start/stop from useMonitor.
  */
@@ -11,11 +14,11 @@ import { useConfigStore } from '@/stores/configStore'
 import { toolRegistry } from '@/core/tools'
 import { skillRegistry } from '@/core/skills/registry'
 import { executeSkill } from '@/core/skills/executor'
-import { createProvider } from '@/core/ai/createProvider'
+import { createProvider, isVisionCapable } from '@/core/ai/createProvider'
 import { t } from '@/i18n/useI18n'
 
 let intervalId: ReturnType<typeof setInterval> | null = null
-const lastOcrSnapshots = new Map<string, string>()
+const lastScreenshots = new Map<string, string>()
 const ruleCooldowns = new Map<string, number>()
 
 export function isVisionMonitorRunning(): boolean {
@@ -35,9 +38,6 @@ export function startVisionMonitor(): void {
     content: t('monitor.visionStarted'),
   })
 
-  // Auto-init vision
-  initVisionIfNeeded()
-
   intervalId = setInterval(pollVision, pollMs)
 }
 
@@ -45,7 +45,7 @@ export function stopVisionMonitor(): void {
   if (intervalId !== null) {
     clearInterval(intervalId)
     intervalId = null
-    lastOcrSnapshots.clear()
+    lastScreenshots.clear()
     ruleCooldowns.clear()
   }
 }
@@ -69,23 +69,6 @@ function getMinInterval(): number {
     }
   }
   return min
-}
-
-async function initVisionIfNeeded() {
-  if (!window.electronAPI) return
-  try {
-    const status = await window.electronAPI.visionStatus()
-    if (!status.initialized) {
-      const chatStore = useChatStore.getState()
-      chatStore.addMessage({
-        role: 'assistant',
-        content: t('monitor.visionInitializing'),
-      })
-      await window.electronAPI.visionInit()
-    }
-  } catch {
-    // Vision init failed — polls will return empty OCR
-  }
 }
 
 async function pollVision() {
@@ -119,58 +102,91 @@ async function pollVision() {
   // Poll each target window
   for (const [windowName, rules] of windowGroups) {
     try {
-      const result = windowName === '__fullscreen__'
-        ? await window.electronAPI.visionAnalyze()
-        : await window.electronAPI.visionAnalyzeWindow(windowName)
+      // Capture screenshot
+      const screenshot = windowName === '__fullscreen__'
+        ? await window.electronAPI.captureScreenshot()
+        : await window.electronAPI.captureWindow(windowName)
 
-      const ocrText = result.ocrText || ''
-      const prevText = lastOcrSnapshots.get(windowName) || ''
-      const newContent = computeNewContent(prevText, ocrText)
-      lastOcrSnapshots.set(windowName, ocrText)
+      const prevScreenshot = lastScreenshots.get(windowName) || ''
 
-      // Skip if no new content (or first run — don't trigger on initial snapshot)
-      if (!newContent || !prevText) continue
+      // Base64 comparison — no change means 0 tokens
+      if (screenshot === prevScreenshot) continue
+
+      lastScreenshots.set(windowName, screenshot)
+
+      // Skip first run — don't trigger on initial snapshot
+      if (!prevScreenshot) continue
+
+      // Determine content description for keyword matching
+      let contentDescription = ''
+
+      // Check if any rules need content analysis (keyword matching)
+      const needsContentAnalysis = rules.some(r => r.trigger.pattern !== '.*') ||
+        keywordAutoReplies.some(r => (r.app || '__fullscreen__') === windowName)
+
+      if (needsContentAnalysis && isVisionCapable()) {
+        // Send screenshot to LLM for description
+        contentDescription = await describeScreenshotViaLLM(screenshot)
+      } else if (needsContentAnalysis) {
+        // Fallback: use window title for keyword matching (Layer 0)
+        try {
+          const win = await window.electronAPI.getActiveWindow()
+          contentDescription = `${win.app} - ${win.title}`
+        } catch {
+          contentDescription = ''
+        }
+      }
 
       // Check content_change monitor rules
       for (const rule of rules) {
         if (!checkCooldown(rule.id, rule.cooldownMs)) continue
 
+        // Pattern '.*' matches any change (no need for content analysis)
+        if (rule.trigger.pattern === '.*') {
+          ruleCooldowns.set(rule.id, Date.now())
+          updateMonitorRule(rule.id, { lastTriggered: Date.now() })
+          await executeVisionAction(rule.action, { app: windowName, title: '' })
+          continue
+        }
+
+        if (!contentDescription) continue
+
         try {
-          const matched = rule.trigger.pattern === '.*'
-            ? true
-            : new RegExp(rule.trigger.pattern, 'i').test(newContent)
+          const matched = new RegExp(rule.trigger.pattern, 'i').test(contentDescription)
           if (!matched) continue
         } catch {
-          if (!newContent.toLowerCase().includes(rule.trigger.pattern.toLowerCase())) continue
+          if (!contentDescription.toLowerCase().includes(rule.trigger.pattern.toLowerCase())) continue
         }
 
         ruleCooldowns.set(rule.id, Date.now())
         updateMonitorRule(rule.id, { lastTriggered: Date.now() })
-        await executeVisionAction(rule.action, { app: windowName, title: newContent.slice(0, 100) })
+        await executeVisionAction(rule.action, { app: windowName, title: contentDescription.slice(0, 100) })
       }
 
       // Check keyword auto-reply rules for this window
-      const matchingARRules = keywordAutoReplies.filter(r => {
-        const ruleWin = r.app || '__fullscreen__'
-        return ruleWin === windowName
-      })
-      for (const rule of matchingARRules) {
-        if (!checkCooldown(`ar_${rule.id}`, 30000)) continue
+      if (contentDescription) {
+        const matchingARRules = keywordAutoReplies.filter(r => {
+          const ruleWin = r.app || '__fullscreen__'
+          return ruleWin === windowName
+        })
+        for (const rule of matchingARRules) {
+          if (!checkCooldown(`ar_${rule.id}`, 30000)) continue
 
-        const keywords = rule.triggerKeywords || []
-        const matched = keywords.some(kw => newContent.toLowerCase().includes(kw.toLowerCase()))
-        if (!matched) continue
+          const keywords = rule.triggerKeywords || []
+          const matched = keywords.some(kw => contentDescription.toLowerCase().includes(kw.toLowerCase()))
+          if (!matched) continue
 
-        ruleCooldowns.set(`ar_${rule.id}`, Date.now())
+          ruleCooldowns.set(`ar_${rule.id}`, Date.now())
 
-        let reply: string
-        if (rule.useAI) {
-          reply = await generateAIReply(newContent)
-        } else {
-          reply = rule.replyTemplate || t('monitor.autoReplyDefault')
+          let reply: string
+          if (rule.useAI) {
+            reply = await generateAIReply(contentDescription)
+          } else {
+            reply = rule.replyTemplate || t('monitor.autoReplyDefault')
+          }
+
+          await sendAutoReply(rule.app, reply)
         }
-
-        await sendAutoReply(rule.app, reply)
       }
     } catch {
       // Skip this window on error, try next
@@ -178,12 +194,25 @@ async function pollVision() {
   }
 }
 
-function computeNewContent(oldText: string, newText: string): string {
-  const oldLines = new Set(oldText.split('\n').map(l => l.trim()).filter(Boolean))
-  return newText.split('\n')
-    .map(l => l.trim())
-    .filter(l => l && !oldLines.has(l))
-    .join('\n')
+async function describeScreenshotViaLLM(screenshotDataUrl: string): Promise<string> {
+  try {
+    const provider = createProvider()
+    if (!provider) return ''
+
+    let description = ''
+    for await (const chunk of provider.streamChat([
+      { role: 'system', content: '简要描述屏幕上的内容变化，只输出关键信息，不超过100字。' },
+      { role: 'user', content: [
+        { type: 'image', source: screenshotDataUrl },
+        { type: 'text', text: '描述屏幕内容' },
+      ] as any },
+    ])) {
+      if (chunk.type === 'text') description += chunk.text
+    }
+    return description
+  } catch {
+    return ''
+  }
 }
 
 function checkCooldown(id: string, cooldownMs: number): boolean {
