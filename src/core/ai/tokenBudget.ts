@@ -13,7 +13,7 @@ export function estimateTokens(text: string): number {
       other++
     }
   }
-  return Math.ceil(cjk / 1.5 + other / 3.5)
+  return Math.ceil(cjk / 1.3 + other / 3.5)
 }
 
 /**
@@ -56,10 +56,19 @@ export function pruneMessages(messages: Message[], budget: number): Message[] {
   const kept: Message[] = []
   let total = 0
   for (let i = rest.length - 1; i >= 0; i--) {
-    const tokens = estimateMessageTokens(rest[i])
+    const msg = rest[i]
+    const tokens = estimateMessageTokens(msg)
     if (total + tokens > remaining && kept.length > 0) break
     total += tokens
-    kept.unshift(rest[i])
+    kept.unshift(msg)
+
+    // If this message has tool_results, also include the preceding assistant with tool_calls
+    if (msg.tool_results && i > 0 && rest[i - 1].tool_calls) {
+      const prevTokens = estimateMessageTokens(rest[i - 1])
+      total += prevTokens
+      kept.unshift(rest[i - 1])
+      i-- // skip the message we just included
+    }
   }
 
   return isSystemFirst ? [first, ...kept] : kept

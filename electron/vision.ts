@@ -15,14 +15,16 @@ export function isVisionInitialized(): boolean {
   return initialized
 }
 
-export async function initVision(modelDir: string): Promise<void> {
+export async function initVision(modelDir: string, electronDir?: string): Promise<void> {
   if (initPromise) return initPromise
 
   initPromise = new Promise<void>((resolve, reject) => {
-    const workerPath = path.join(__dirname, 'vision-worker.js')
+    const dir = electronDir || __dirname
+    const workerPath = path.join(dir, 'vision-worker.cjs')
     worker = new Worker(workerPath)
 
     const timeout = setTimeout(() => {
+      initPromise = null
       reject(new Error('Vision worker init timeout'))
     }, 120000) // 2 min for model download
 
@@ -32,12 +34,14 @@ export async function initVision(modelDir: string): Promise<void> {
         initialized = true
         resolve()
       } else if (msg.type === 'init-error') {
+        initPromise = null
         reject(new Error(msg.error || 'Vision init failed'))
       }
     })
 
     worker.once('error', (err) => {
       clearTimeout(timeout)
+      initPromise = null
       reject(err)
     })
 
@@ -69,7 +73,7 @@ export async function analyzeScreen(jpegBuffer: Buffer): Promise<VisionResult> {
       }
     }
 
-    worker.on('message', handler)
-    worker.postMessage({ type: 'analyze', jpegBuffer: new Uint8Array(jpegBuffer) })
+    worker!.on('message', handler)
+    worker!.postMessage({ type: 'analyze', jpegBuffer: new Uint8Array(jpegBuffer) })
   })
 }

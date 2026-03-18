@@ -1,6 +1,7 @@
 import { memoryStore } from './store'
 import type { Message } from '@/stores/chatStore'
 import { summarizeConversation } from './summarizer'
+import { useConfigStore } from '@/stores/configStore'
 
 /**
  * Extract user info, facts, and episode summaries from a conversation.
@@ -8,7 +9,9 @@ import { summarizeConversation } from './summarizer'
  */
 export function extractFromConversation(messages: Message[]) {
   const userMessages = messages.filter((m) => m.role === 'user')
-  if (userMessages.length < 2) return
+  const assistantMsgs = messages.filter((m) => m.role === 'assistant' && m.content.length > 0)
+  const rounds = Math.min(userMessages.length, assistantMsgs.length)
+  if (rounds < 3) return
 
   // --- Identity & Preferences extraction ---
   for (const msg of userMessages) {
@@ -18,6 +21,9 @@ export function extractFromConversation(messages: Message[]) {
     const nameMatch = text.match(/(?:我(?:叫|是)|my name is|call me)\s*(\S+)/i)
     if (nameMatch) {
       memoryStore.updateIdentity({ name: nameMatch[1] })
+      if (!useConfigStore.getState().userName) {
+        useConfigStore.getState().updateConfig({ userName: nameMatch[1] })
+      }
     }
 
     // Language

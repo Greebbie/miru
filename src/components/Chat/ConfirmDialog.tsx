@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { useI18n } from '@/i18n/useI18n'
 
 interface ConfirmDialogProps {
   title: string
@@ -14,11 +15,11 @@ const riskColors = {
   high: 'border-red-400/50 bg-red-500/10',
 }
 
-const riskLabels = {
-  low: '低风险',
-  medium: '⚠️ 中风险',
-  high: '🚨 高风险',
-}
+const riskLabelKeys = {
+  low: 'dialog.risk.low',
+  medium: 'dialog.risk.medium',
+  high: 'dialog.risk.high',
+} as const
 
 export default function ConfirmDialog({
   title,
@@ -27,6 +28,8 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useI18n()
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
@@ -35,7 +38,7 @@ export default function ConfirmDialog({
       className={`rounded-xl border p-3 my-2 ${riskColors[riskLevel]}`}
     >
       <div className="flex items-center gap-2 mb-1">
-        <span className="text-xs text-white/50">{riskLabels[riskLevel]}</span>
+        <span className="text-xs text-white/50">{t(riskLabelKeys[riskLevel])}</span>
       </div>
       <p className="text-white text-sm font-medium mb-1">{title}</p>
       <p className="text-white/60 text-xs mb-3">{description}</p>
@@ -48,13 +51,13 @@ export default function ConfirmDialog({
               : 'bg-blue-500/80 hover:bg-blue-500'
           } transition-colors`}
         >
-          确认执行
+          {t('dialog.confirm')}
         </button>
         <button
           onClick={onCancel}
           className="flex-1 text-xs py-1.5 rounded-lg bg-white/10 text-white/60 hover:bg-white/20 transition-colors"
         >
-          取消
+          {t('dialog.cancel')}
         </button>
       </div>
     </motion.div>

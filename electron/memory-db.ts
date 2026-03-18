@@ -1,13 +1,14 @@
 import { ipcMain } from 'electron';
 import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
 
-const require = createRequire(import.meta.url);
+const nativeRequire = createRequire(fileURLToPath(import.meta.url));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DB = any;
 
 export function setupMemoryDb(dbPath: string): DB {
-  const Database = require('better-sqlite3');
+  const Database = nativeRequire('better-sqlite3');
   const db: DB = new Database(dbPath);
 
   // Performance pragmas
@@ -92,6 +93,9 @@ export function setupMemoryDb(dbPath: string): DB {
     searchFacts: db.prepare(
       `SELECT f.* FROM facts_fts ft JOIN facts f ON ft.rowid = f.id WHERE facts_fts MATCH ? LIMIT ?`
     ),
+    findExactFact: db.prepare(
+      `SELECT id FROM facts WHERE category = ? AND content = ? LIMIT 1`
+    ),
     updateFactAccess: db.prepare(
       `UPDATE facts SET last_accessed = ?, access_count = access_count + 1 WHERE id = ?`
     ),
@@ -162,6 +166,13 @@ export function setupMemoryDb(dbPath: string): DB {
     sourceEpisodeId?: number;
     source_episode_id?: number;
   }) => {
+    // Dedup: check if exact same fact already exists
+    const existing = stmts.findExactFact.get(fact.category, fact.content) as { id: number } | undefined;
+    if (existing) {
+      stmts.updateFactAccess.run(Date.now(), existing.id);
+      return existing.id;
+    }
+
     const now = Date.now();
     const info = stmts.addFact.run(
       fact.category,

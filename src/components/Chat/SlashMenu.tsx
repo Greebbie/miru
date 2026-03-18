@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { skillRegistry } from '@/core/skills/registry'
 import type { SkillDefinition } from '@/core/skills/registry'
+import { useI18n } from '@/i18n/useI18n'
 
 interface SlashMenuProps {
   filter: string
@@ -10,6 +11,7 @@ interface SlashMenuProps {
 
 export default function SlashMenu({ filter, onSelect, onClose }: SlashMenuProps) {
   const [activeIndex, setActiveIndex] = useState(0)
+  const { t } = useI18n()
   const query = filter.startsWith('/') ? filter.slice(1) : filter
   const results = skillRegistry.search(query).slice(0, 6)
 
@@ -41,7 +43,15 @@ export default function SlashMenu({ filter, onSelect, onClose }: SlashMenuProps)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleKeyDown])
 
-  if (results.length === 0) return null
+  if (results.length === 0) {
+    return (
+      <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#1e1e28]/95 border border-white/10 rounded-lg overflow-hidden shadow-xl backdrop-blur-sm z-50">
+        <div className="px-3 py-2 text-white/30 text-xs text-center">
+          {t('slash.noMatch')}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#1e1e28]/95 border border-white/10 rounded-lg overflow-hidden shadow-xl backdrop-blur-sm z-50">

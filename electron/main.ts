@@ -1,15 +1,17 @@
-import { app, BrowserWindow, ipcMain, screen, clipboard, globalShortcut, Tray, Menu, nativeImage, desktopCapturer } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, clipboard, globalShortcut, Tray, Menu, nativeImage, desktopCapturer, shell, net } from 'electron'
 import https from 'https'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs'
 import os from 'os'
-import { exec } from 'child_process'
+import { exec, execFile } from 'child_process'
 import { initVision, analyzeScreen, isVisionInitialized } from './vision'
+import { initSTT, transcribeAudio, isSTTInitialized, destroySTT } from './stt'
 import { setupMonitor } from './monitor'
 import { setupAutomation } from './automation'
 import { setupMemoryDb } from './memory-db'
 
+// main.js is loaded as ESM (package.json "type": "module"), so define __filename/__dirname
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
@@ -57,8 +59,13 @@ class JsonStore {
 let store: JsonStore
 
 function createWindow() {
-  const iconPath = path.join(__dirname, '../src/assets/miru.png')
-  const iconImage = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : undefined
+  const iconCandidates = [
+    path.join(__dirname, '../src/assets/miru.png'),     // dev
+    path.join(__dirname, '../dist/miru.png'),            // built
+    path.join(process.resourcesPath || '', 'miru.png'),  // packaged
+  ]
+  const iconPath = iconCandidates.find((p) => fs.existsSync(p))
+  const iconImage = iconPath ? nativeImage.createFromPath(iconPath) : undefined
 
   mainWindow = new BrowserWindow({
     width: 400,
@@ -75,7 +82,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false, // Allow cross-origin API calls from renderer (Claude, OpenAI, etc.)
+      webSecurity: true,
     },
   })
 
@@ -92,6 +99,24 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
+
+  // Handle CORS for AI API calls (replaces webSecurity:false)
+  const ses = mainWindow.webContents.session
+  ses.webRequest.onBeforeSendHeaders((details, callback) => {
+    const headers = { ...details.requestHeaders }
+    delete headers['Origin']
+    callback({ requestHeaders: headers })
+  })
+  ses.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'access-control-allow-origin': ['*'],
+        'access-control-allow-headers': ['*'],
+        'access-control-allow-methods': ['*'],
+      },
+    })
+  })
 
   mainWindow.on('closed', () => {
     mainWindow = null
@@ -246,16 +271,25 @@ ipcMain.handle('search-files', (_event, dirPath: string, pattern: string) => {
 ipcMain.handle('open-app', (_event, name: string) => {
   return new Promise<void>((resolve, reject) => {
     const platform = os.platform()
-    let cmd: string
-    if (platform === 'win32') cmd = `start "" "${name}"`
-    else if (platform === 'darwin') cmd = `open -a "${name}"`
-    else cmd = `xdg-open "${name}" 2>/dev/null || ${name.toLowerCase()}`
-
-    exec(cmd, (err) => {
+    const cb = (err: Error | null) => {
       if (err) reject(new Error(`Cannot open "${name}"`))
       else resolve()
-    })
+    }
+
+    if (platform === 'win32') {
+      execFile('cmd', ['/c', 'start', '', name], cb)
+    } else if (platform === 'darwin') {
+      execFile('open', ['-a', name], cb)
+    } else {
+      execFile('xdg-open', [name], cb)
+    }
   })
+})
+
+// ---- Tool IPC: Open URL ----
+
+ipcMain.handle('open-url', async (_event, url: string) => {
+  await shell.openExternal(url)
 })
 
 // ---- Tool IPC: Shell ----
@@ -432,39 +466,70 @@ ipcMain.handle('get-home-dir', () => os.homedir().replace(/\\/g, '/'))
 
 // ---- Tool IPC: Web Search ----
 
-ipcMain.handle('web-search', (_event, query: string) => {
-  return new Promise<{ abstract: string; results: { title: string; snippet: string; url: string }[] }>((resolve, reject) => {
-    const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`
-    const req = https.get(url, { timeout: 10000 }, (res) => {
-      let data = ''
-      res.on('data', (chunk: string) => { data += chunk })
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data)
-          const results: { title: string; snippet: string; url: string }[] = []
-          if (json.RelatedTopics) {
-            for (const topic of json.RelatedTopics.slice(0, 5)) {
-              if (topic.Text && topic.FirstURL) {
-                results.push({
-                  title: topic.Text.split(' - ')[0]?.slice(0, 80) || '',
-                  snippet: topic.Text.slice(0, 200),
-                  url: topic.FirstURL,
-                })
-              }
-            }
-          }
-          resolve({
-            abstract: json.AbstractText || '',
-            results,
-          })
-        } catch {
-          reject(new Error('Failed to parse search results'))
+// Bing search scraper — works in China, no API key needed
+function fetchWithRedirects(targetUrl: string, headers: Record<string, string>, maxRedirects = 3): Promise<string> {
+  return new Promise((resolve, reject) => {
+    function doRequest(currentUrl: string, remaining: number) {
+      const parsedUrl = new URL(currentUrl)
+      const mod = parsedUrl.protocol === 'https:' ? https : https
+      const req = mod.get(currentUrl, { headers, timeout: 10000 }, (res) => {
+        if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location && remaining > 0) {
+          const next = res.headers.location.startsWith('http')
+            ? res.headers.location
+            : `${parsedUrl.protocol}//${parsedUrl.host}${res.headers.location}`
+          res.resume()
+          doRequest(next, remaining - 1)
+          return
         }
+        let data = ''
+        res.on('data', (chunk: string) => { data += chunk })
+        res.on('end', () => resolve(data))
       })
-    })
-    req.on('error', () => reject(new Error('Search request failed')))
-    req.on('timeout', () => { req.destroy(); reject(new Error('Search timeout')) })
+      req.on('error', (err) => reject(err))
+      req.on('timeout', () => { req.destroy(); reject(new Error('timeout')) })
+    }
+    doRequest(targetUrl, maxRedirects)
   })
+}
+
+function parseBingResults(html: string): { title: string; snippet: string; url: string }[] {
+  const results: { title: string; snippet: string; url: string }[] = []
+  // Match Bing search result blocks: <li class="b_algo">
+  const blockRegex = /<li class="b_algo">([\s\S]*?)<\/li>/g
+  let match
+  while ((match = blockRegex.exec(html)) !== null && results.length < 5) {
+    const block = match[1]
+    // Extract URL and title from <h2><a href="...">...</a></h2>
+    const titleMatch = /<h2>\s*<a[^>]+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/i.exec(block)
+    if (!titleMatch) continue
+    const url = titleMatch[1]
+    const title = titleMatch[2].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#?\w+;/g, '').trim()
+    // Extract snippet from <p> or <div class="b_caption"><p>
+    const snippetMatch = /<p[^>]*>([\s\S]*?)<\/p>/i.exec(block)
+    const snippet = snippetMatch
+      ? snippetMatch[1].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#?\w+;/g, '').trim()
+      : ''
+    if (title && url) {
+      results.push({ title: title.slice(0, 100), snippet: snippet.slice(0, 300), url })
+    }
+  }
+  return results
+}
+
+ipcMain.handle('web-search', async (_event, query: string) => {
+  try {
+    const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}&setlang=zh-CN`
+    const html = await fetchWithRedirects(searchUrl, {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml',
+      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      'Accept-Encoding': 'identity',
+    })
+    const results = parseBingResults(html)
+    return { abstract: '', results }
+  } catch (err) {
+    throw new Error(`Search failed: ${(err as Error).message}`)
+  }
 })
 
 // ---- Vision IPC ----
@@ -472,7 +537,7 @@ ipcMain.handle('web-search', (_event, query: string) => {
 ipcMain.handle('vision-init', async () => {
   try {
     const modelDir = path.join(app.getPath('userData'), 'models')
-    await initVision(modelDir)
+    await initVision(modelDir, __dirname)
     return { success: true }
   } catch (err) {
     return { success: false, error: (err as Error).message }
@@ -496,6 +561,321 @@ ipcMain.handle('vision-analyze', async () => {
 
 ipcMain.handle('vision-status', () => {
   return { initialized: isVisionInitialized() }
+})
+
+// ---- Vision IPC: Window-targeted ----
+
+ipcMain.handle('get-window-list', async () => {
+  const sources = await desktopCapturer.getSources({
+    types: ['window'],
+    thumbnailSize: { width: 1, height: 1 },
+  })
+  return sources.map(s => ({ id: s.id, name: s.name })).filter(s => s.name)
+})
+
+ipcMain.handle('vision-analyze-window', async (_event, windowName: string) => {
+  try {
+    // Auto-init vision if needed
+    if (!isVisionInitialized()) {
+      const modelDir = path.join(app.getPath('userData'), 'models')
+      await initVision(modelDir, __dirname)
+    }
+
+    const sources = await desktopCapturer.getSources({
+      types: ['window'],
+      thumbnailSize: { width: 640, height: 360 },
+    })
+
+    // Fuzzy match window name (case-insensitive)
+    const lowerName = windowName.toLowerCase()
+    let source = sources.find(s => s.name.toLowerCase().includes(lowerName))
+
+    // Fallback to full screen if window not found — report it
+    let fellBackToFullScreen = false
+    if (!source) {
+      const screenSources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: { width: 640, height: 360 },
+      })
+      source = screenSources[0]
+      fellBackToFullScreen = true
+    }
+
+    if (!source) {
+      return { detections: [], ocrText: '', summary: 'No source available' }
+    }
+
+    const jpegBuffer = source.thumbnail.toJPEG(80)
+    const result = await analyzeScreen(Buffer.from(jpegBuffer))
+    if (fellBackToFullScreen) {
+      return {
+        ...result,
+        summary: `[Window "${windowName}" not found, used full screen] ${result.summary}`,
+      }
+    }
+    return result
+  } catch (err) {
+    return { detections: [], ocrText: '', summary: `Vision error: ${(err as Error).message}` }
+  }
+})
+
+// ---- STT (Whisper) IPC ----
+
+ipcMain.handle('stt-init', async (_event, modelId?: string) => {
+  try {
+    const cacheDir = path.join(app.getPath('userData'), 'models', 'whisper')
+    await initSTT(cacheDir, modelId || 'Xenova/whisper-tiny', (progress) => {
+      mainWindow?.webContents.send('stt-progress', progress)
+    }, __dirname)
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: (err as Error).message }
+  }
+})
+
+ipcMain.handle('stt-transcribe', async (_event, audioData: Float32Array, language?: string) => {
+  try {
+    const result = await transcribeAudio(audioData, language)
+    return result
+  } catch (err) {
+    return { text: '', error: (err as Error).message }
+  }
+})
+
+ipcMain.handle('stt-status', () => {
+  return { initialized: isSTTInitialized() }
+})
+
+ipcMain.handle('stt-switch-model', async (_event, modelId: string) => {
+  try {
+    destroySTT()
+    const cacheDir = path.join(app.getPath('userData'), 'models', 'whisper')
+    await initSTT(cacheDir, modelId, (progress) => {
+      mainWindow?.webContents.send('stt-progress', progress)
+    }, __dirname)
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: (err as Error).message }
+  }
+})
+
+// ---- Skill Marketplace IPC ----
+
+ipcMain.handle('skill-get-dir', () => {
+  const dir = path.join(os.homedir(), '.miru', 'skills')
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  return dir.replace(/\\/g, '/')
+})
+
+ipcMain.handle('skill-scan-local', () => {
+  const dir = path.join(os.homedir(), '.miru', 'skills')
+  if (!fs.existsSync(dir)) return []
+  const results: { id: string; skillMdContent: string; files: string[] }[] = []
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const skillDir = path.join(dir, entry.name)
+      const skillMdPath = path.join(skillDir, 'SKILL.md')
+      if (!fs.existsSync(skillMdPath)) continue
+      const skillMdContent = fs.readFileSync(skillMdPath, 'utf-8')
+      const files = fs.readdirSync(skillDir)
+      results.push({ id: entry.name, skillMdContent, files })
+    }
+  } catch { /* ignore */ }
+  return results
+})
+
+ipcMain.handle('skill-install', async (_event, { repoUrl, skillId, files }: { repoUrl: string; skillId: string; files: string[] }) => {
+  // Security: validate skillId has no path traversal
+  const skillsRoot = path.resolve(os.homedir(), '.miru', 'skills')
+  const dir = path.resolve(skillsRoot, skillId)
+  if (!dir.startsWith(skillsRoot) || skillId.includes('..')) {
+    return { success: false, skillDir: '' }
+  }
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+
+  for (const file of files) {
+    // Security: validate each file path stays inside skill dir
+    const filePath = path.resolve(dir, file)
+    if (!filePath.startsWith(dir)) continue // skip traversal attempts
+
+    const fileUrl = `${repoUrl.replace(/\/$/, '')}/${file}`
+    await new Promise<void>((resolve, reject) => {
+      const req = https.get(fileUrl, { timeout: 15000 }, (res) => {
+        if (res.statusCode === 301 || res.statusCode === 302) {
+          // Follow redirect
+          const redirectUrl = res.headers.location
+          if (!redirectUrl) return reject(new Error('Redirect without location'))
+          https.get(redirectUrl, { timeout: 15000 }, (res2) => {
+            // Skip 404 on redirect target
+            if (res2.statusCode === 404) { res2.resume(); resolve(); return }
+            let data = ''
+            res2.on('data', (chunk: string) => { data += chunk })
+            res2.on('end', () => {
+              fs.writeFileSync(filePath, data, 'utf-8')
+              resolve()
+            })
+          }).on('error', reject)
+          return
+        }
+        // Skip 404 — some skills don't have all script files
+        if (res.statusCode === 404) { res.resume(); resolve(); return }
+        let data = ''
+        res.on('data', (chunk: string) => { data += chunk })
+        res.on('end', () => {
+          fs.writeFileSync(filePath, data, 'utf-8')
+          resolve()
+        })
+      })
+      req.on('error', reject)
+      req.on('timeout', () => { req.destroy(); reject(new Error('Download timeout')) })
+    })
+  }
+  return { success: true, skillDir: dir.replace(/\\/g, '/') }
+})
+
+ipcMain.handle('skill-uninstall', (_event, skillId: string) => {
+  // Security: validate skillId has no path traversal
+  const skillsRoot = path.resolve(os.homedir(), '.miru', 'skills')
+  const dir = path.resolve(skillsRoot, skillId)
+  if (!dir.startsWith(skillsRoot) || skillId.includes('..')) return
+  if (fs.existsSync(dir)) {
+    fs.rmSync(dir, { recursive: true })
+  }
+})
+
+ipcMain.handle('skill-exec-script', (_event, { skillDir, interpreter, params }: { skillDir: string; interpreter: string; params: Record<string, string> }) => {
+  return new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve) => {
+    const dir = normalizePath(skillDir)
+
+    // Security: validate skillDir is inside ~/.miru/skills/
+    const skillsRoot = path.resolve(os.homedir(), '.miru', 'skills')
+    const resolvedDir = path.resolve(dir)
+    if (!resolvedDir.startsWith(skillsRoot)) {
+      resolve({ stdout: '', stderr: 'Invalid skill directory', exitCode: 1 })
+      return
+    }
+
+    // Use execFile to avoid shell injection
+    let command: string
+    let args: string[]
+    switch (interpreter) {
+      case 'node': command = 'node'; args = [path.join(resolvedDir, 'run.js')]; break
+      case 'python': command = 'python'; args = [path.join(resolvedDir, 'run.py')]; break
+      case 'powershell': command = 'powershell'; args = ['-ExecutionPolicy', 'Bypass', '-File', path.join(resolvedDir, 'run.ps1')]; break
+      default: command = 'bash'; args = [path.join(resolvedDir, 'run.sh')]; break
+    }
+
+    // Only pass PATH + MIRU_PARAM_* (not full process.env with API keys)
+    const env: Record<string, string> = {
+      PATH: process.env.PATH || '',
+      HOME: process.env.HOME || os.homedir(),
+      USERPROFILE: process.env.USERPROFILE || os.homedir(),
+    }
+    for (const [k, v] of Object.entries(params)) {
+      env[`MIRU_PARAM_${k.toUpperCase()}`] = String(v)
+    }
+
+    execFile(command, args, { timeout: 30000, env, cwd: resolvedDir }, (err, stdout, stderr) => {
+      resolve({
+        stdout: stdout.slice(0, 2000),
+        stderr: stderr.slice(0, 500),
+        exitCode: err ? 1 : 0,
+      })
+    })
+  })
+})
+
+// ---- Proxy Fetch (bypass CORS for AI providers) ----
+
+const activeStreams = new Map<string, AbortController>()
+
+ipcMain.handle('proxy-fetch', async (_event, url: string, options: { method?: string; headers?: Record<string, string>; body?: string }) => {
+  console.log('[Miru] proxy-fetch →', options.method || 'POST', url)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15000)
+  try {
+    const res = await net.fetch(url, {
+      method: options.method || 'POST',
+      headers: options.headers,
+      body: options.body,
+      signal: controller.signal,
+    })
+    const body = await res.text()
+    console.log('[Miru] proxy-fetch ←', res.status, body.slice(0, 200))
+    return { status: res.status, body }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[Miru] proxy-fetch error:', msg)
+    throw new Error(msg)
+  } finally {
+    clearTimeout(timeout)
+  }
+})
+
+ipcMain.handle('proxy-stream', async (event, url: string, options: { method?: string; headers?: Record<string, string>; body?: string }) => {
+  const streamId = Math.random().toString(36).slice(2, 10)
+  const abortController = new AbortController()
+
+  try {
+    const res = await net.fetch(url, {
+      method: options.method || 'POST',
+      headers: options.headers,
+      body: options.body,
+      signal: abortController.signal,
+    })
+
+    if (res.status >= 400) {
+      const errBody = await res.text()
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('proxy-stream-error', streamId, `API error ${res.status}: ${errBody}`)
+      }
+      return { streamId }
+    }
+
+    activeStreams.set(streamId, abortController)
+
+    // Read stream in background
+    const reader = res.body?.getReader()
+    if (reader) {
+      const decoder = new TextDecoder()
+      const pump = async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            if (!event.sender.isDestroyed()) {
+              event.sender.send('proxy-stream-data', streamId, decoder.decode(value, { stream: true }))
+            }
+          }
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('proxy-stream-end', streamId)
+          }
+        } catch (err) {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('proxy-stream-error', streamId, (err as Error).message)
+          }
+        } finally {
+          activeStreams.delete(streamId)
+        }
+      }
+      pump()
+    }
+
+    return { streamId }
+  } catch (err) {
+    activeStreams.delete(streamId)
+    return { error: (err as Error).message }
+  }
+})
+
+ipcMain.handle('proxy-stream-abort', (_event, streamId: string) => {
+  const controller = activeStreams.get(streamId)
+  if (controller) {
+    controller.abort()
+    activeStreams.delete(streamId)
+  }
 })
 
 // ---- Persistent Store IPC ----
@@ -557,7 +937,22 @@ function createTray() {
 
 app.commandLine.appendSwitch('remote-debugging-port', '9222')
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Inherit system proxy from env (e.g. http_proxy / https_proxy)
+  const proxyUrl = process.env.https_proxy || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.HTTP_PROXY
+  if (proxyUrl) {
+    console.log('[Miru] Setting proxy:', proxyUrl)
+    // Electron setProxy needs proxyRules in Chromium format: "http://host:port"
+    // Also set proxyBypassRules for localhost
+    const { session } = await import('electron')
+    await session.defaultSession.setProxy({
+      proxyRules: proxyUrl,
+      proxyBypassRules: 'localhost,127.0.0.1',
+    })
+    const resolved = await session.defaultSession.resolveProxy('https://api.minimax.chat')
+    console.log('[Miru] Proxy resolved for minimax:', resolved)
+  }
+
   store = new JsonStore()
   createWindow()
   createTray()

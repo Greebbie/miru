@@ -1,4 +1,5 @@
 import { toolRegistry } from './registry'
+import { humanizeError } from '@/core/errors/humanize'
 
 toolRegistry.register({
   name: 'clipboard_read',
@@ -18,7 +19,7 @@ toolRegistry.register({
         summary: `${text.length} chars`,
       }
     } catch (err) {
-      return { success: false, data: null, summary: `Failed: ${(err as Error).message}` }
+      return { success: false, data: null, summary: humanizeError(err, 'auto') }
     }
   },
 })
@@ -43,7 +44,7 @@ toolRegistry.register({
       await window.electronAPI.clipboardWrite(params.text as string)
       return { success: true, data: null, summary: 'Copied to clipboard' }
     } catch (err) {
-      return { success: false, data: null, summary: `Failed: ${(err as Error).message}` }
+      return { success: false, data: null, summary: humanizeError(err, 'auto') }
     }
   },
 })

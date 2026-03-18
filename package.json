@@ -13,6 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
     "better-sqlite3": "^11.7.0",
     "electron-store": "^10.0.0",
     "framer-motion": "^11.15.0",
@@ -25,13 +26,18 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/better-sqlite3": "^7.6.12",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "^4.1.0",
     "autoprefixer": "^10.4.20",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
+    "happy-dom": "^20.8.4",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.6.3",
@@ -44,7 +50,8 @@
     "appId": "com.miru.app",
     "productName": "Miru",
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "miru.png"
     },
     "nsis": {
       "oneClick": true,
@@ -53,6 +60,12 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "miru.png",
+        "to": "miru.png"
+      }
     ]
   }
 }

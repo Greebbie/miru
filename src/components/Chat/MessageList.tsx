@@ -7,6 +7,7 @@ import { useConfigStore } from '@/stores/configStore'
 import { useAI } from '@/hooks/useAI'
 import { speakText, stopSpeaking } from '@/core/tts'
 import { toolRegistry } from '@/core/tools'
+import { useI18n } from '@/i18n/useI18n'
 import ToolCallBadge from './ToolCallBadge'
 
 function CopyButton({ text }: { text: string }) {
@@ -17,7 +18,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/10 hover:bg-white/20 rounded px-1.5 py-0.5 text-[10px] text-white/70"
+      className="absolute top-1 right-1 opacity-20 group-hover:opacity-100 transition-opacity bg-white/10 hover:bg-white/20 rounded px-1.5 py-0.5 text-[10px] text-white/70"
     >
       Copy
     </button>
@@ -26,6 +27,7 @@ function CopyButton({ text }: { text: string }) {
 
 function SpeakButton({ text }: { text: string }) {
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const { t } = useI18n()
 
   const handleClick = useCallback(() => {
     if (isSpeaking) {
@@ -47,8 +49,8 @@ function SpeakButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleClick}
-      className="absolute top-1 right-8 opacity-0 group-hover:opacity-100 transition-opacity bg-white/10 hover:bg-white/20 rounded px-1.5 py-0.5 text-[10px] text-white/70"
-      title={isSpeaking ? '停止朗读' : '朗读'}
+      className="absolute top-1 right-8 opacity-20 group-hover:opacity-100 transition-opacity bg-white/10 hover:bg-white/20 rounded px-1.5 py-0.5 text-[10px] text-white/70"
+      title={isSpeaking ? t('chat.stopSpeaking') : t('chat.speak')}
     >
       {isSpeaking ? '\u23F9' : '\uD83D\uDD0A'}
     </button>
@@ -72,7 +74,7 @@ const markdownComponents: Components = {
           </pre>
           <button
             onClick={() => navigator.clipboard.writeText(String(children).replace(/\n$/, ''))}
-            className="absolute top-1 right-1 opacity-0 group-hover/code:opacity-100 transition-opacity bg-white/10 hover:bg-white/20 rounded px-1.5 py-0.5 text-[10px] text-white/70"
+            className="absolute top-1 right-1 opacity-20 group-hover/code:opacity-100 transition-opacity bg-white/10 hover:bg-white/20 rounded px-1.5 py-0.5 text-[10px] text-white/70"
           >
             Copy
           </button>
@@ -101,48 +103,6 @@ function TypingIndicator() {
   )
 }
 
-const capabilityCategories = [
-  {
-    icon: '\uD83D\uDCC1',
-    label: '文件管理',
-    actions: [
-      { label: '整理桌面文件', prompt: '帮我整理桌面文件，按类型分类' },
-      { label: '列出文件', prompt: '列出桌面文件' },
-    ],
-  },
-  {
-    icon: '\uD83D\uDE80',
-    label: '应用控制',
-    actions: [
-      { label: '打开应用', prompt: '打开记事本' },
-    ],
-  },
-  {
-    icon: '\uD83D\uDD0D',
-    label: '搜索',
-    actions: [
-      { label: '网页搜索', prompt: '搜索 TypeScript 教程' },
-    ],
-  },
-  {
-    icon: '\uD83D\uDCBB',
-    label: '系统工具',
-    actions: [
-      { label: '系统信息', prompt: '系统信息' },
-      { label: '设置提醒', prompt: '5分钟后提醒我休息' },
-      { label: '剪贴板', prompt: '读取剪贴板内容' },
-    ],
-  },
-  {
-    icon: '\u2699',
-    label: '高级功能',
-    actions: [
-      { label: '监控规则', prompt: null, action: 'openAdmin' as const },
-      { label: '语音输入 Alt+M', prompt: null, action: 'info' as const },
-    ],
-  },
-]
-
 interface MessageListProps {
   onOpenAdmin?: () => void
 }
@@ -152,10 +112,64 @@ export default function MessageList({ onOpenAdmin }: MessageListProps) {
   const ttsEnabled = useConfigStore((s) => s.ttsEnabled)
   const { sendMessage } = useAI()
   const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const isNearBottomRef = useRef(true)
+  const { t } = useI18n()
 
-  // Auto-scroll to bottom
+  const capabilityCategories = [
+    {
+      icon: '\uD83D\uDCC1',
+      label: t('cap.files'),
+      actions: [
+        { label: t('cap.files.organize'), prompt: t('cap.files.organize') },
+        { label: t('cap.files.list'), prompt: t('cap.files.list') },
+      ],
+    },
+    {
+      icon: '\uD83D\uDE80',
+      label: t('cap.apps'),
+      actions: [
+        { label: t('cap.apps.open'), prompt: t('cap.apps.open') },
+      ],
+    },
+    {
+      icon: '\uD83D\uDD0D',
+      label: t('cap.search'),
+      actions: [
+        { label: t('cap.search.web'), prompt: t('cap.search.web') },
+      ],
+    },
+    {
+      icon: '\uD83D\uDCBB',
+      label: t('cap.system'),
+      actions: [
+        { label: t('cap.system.info'), prompt: t('cap.system.info') },
+        { label: t('cap.system.reminder'), prompt: t('cap.system.reminder') },
+        { label: t('cap.system.clipboard'), prompt: t('cap.system.clipboard') },
+      ],
+    },
+    {
+      icon: '\u2699',
+      label: t('cap.advanced'),
+      actions: [
+        { label: t('cap.advanced.monitor'), prompt: null, action: 'openAdmin' as const },
+        { label: t('cap.advanced.voice'), prompt: null, action: 'info' as const },
+      ],
+    },
+  ]
+
+  // Track scroll position to avoid interrupting user reading history
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100
+  }, [])
+
+  // Auto-scroll to bottom only when user is near bottom
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (isNearBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [messages])
 
   // Consume pendingPrompt from context menu
@@ -166,14 +180,27 @@ export default function MessageList({ onOpenAdmin }: MessageListProps) {
     }
   }, [pendingPrompt, sendMessage, setPendingPrompt])
 
-  const visibleMessages = messages.filter((m) => m.role !== 'system')
+  const [showAll, setShowAll] = useState(false)
+  const INITIAL_LIMIT = 15
+
+  const allVisible = messages.filter((m) => {
+    if (m.role === 'system') return false
+    // Hide empty assistant messages unless it's the last one during streaming (placeholder)
+    if (m.role === 'assistant' && !m.content && (!m.toolCalls || m.toolCalls.length === 0)) {
+      if (isStreaming && m.id === messages[messages.length - 1]?.id) return true
+      return false
+    }
+    return true
+  })
+  const hasMore = !showAll && allVisible.length > INITIAL_LIMIT
+  const visibleMessages = hasMore ? allVisible.slice(-INITIAL_LIMIT) : allVisible
   const showTyping = isStreaming && visibleMessages.length > 0 && visibleMessages[visibleMessages.length - 1]?.content === ''
 
   return (
-    <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-[100px] max-h-[320px]">
+    <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-3 space-y-2 min-h-[100px] max-h-[320px]">
       {visibleMessages.length === 0 && (
         <div className="py-3 px-1">
-          <p className="text-white/50 text-xs mb-3">我可以帮你做这些事</p>
+          <p className="text-white/50 text-xs mb-3">{t('chat.empty')}</p>
           <div className="space-y-2.5">
             {capabilityCategories.map((cat) => (
               <div key={cat.label}>
@@ -201,9 +228,17 @@ export default function MessageList({ onOpenAdmin }: MessageListProps) {
             ))}
           </div>
           <p className="text-white/30 text-[10px] mt-3 text-center">
-            输入 / 查看所有命令 · Ctrl+Space 命令面板
+            {t('chat.emptyHint')}
           </p>
         </div>
+      )}
+      {hasMore && (
+        <button
+          onClick={() => setShowAll(true)}
+          className="w-full text-center text-white/30 hover:text-white/50 text-[10px] py-1 transition-colors"
+        >
+          {t('chat.loadMore')}
+        </button>
       )}
       {visibleMessages.map((msg) => (
         <motion.div

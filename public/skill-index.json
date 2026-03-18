@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "updatedAt": "2026-03-18",
+  "skills": [
+    {
+      "id": "quick_note",
+      "name": "\u5feb\u901f\u7b14\u8bb0",
+      "nameEn": "Quick Note",
+      "icon": "\uD83D\uDCDD",
+      "category": "create",
+      "description": "\u5feb\u901f\u8bb0\u5f55\u7b14\u8bb0\u5230\u672c\u5730 Markdown",
+      "descriptionEn": "Quick capture to local markdown",
+      "author": "miru-team",
+      "version": "1.0.0",
+      "source": "miru-registry",
+      "repoUrl": "https://raw.githubusercontent.com/miru-app/skills/main/quick-note",
+      "riskLevel": "low",
+      "tags": ["note", "markdown", "\u7b14\u8bb0", "\u8bb0\u5f55"]
+    },
+    {
+      "id": "clipboard_history",
+      "name": "\u526a\u8d34\u677f\u5386\u53f2",
+      "nameEn": "Clipboard History",
+      "icon": "\uD83D\uDCCB",
+      "category": "system",
+      "description": "\u8bb0\u5f55\u526a\u8d34\u677f\u5386\u53f2\uff0c\u968f\u65f6\u641c\u7d22",
+      "descriptionEn": "Track clipboard history, search anytime",
+      "author": "miru-team",
+      "version": "1.0.0",
+      "source": "miru-registry",
+      "repoUrl": "https://raw.githubusercontent.com/miru-app/skills/main/clipboard-history",
+      "riskLevel": "low",
+      "tags": ["clipboard", "\u526a\u8d34\u677f", "history", "\u5386\u53f2"]
+    },
+    {
+      "id": "screen_reader",
+      "name": "\u5c4f\u5e55\u9605\u8bfb",
+      "nameEn": "Screen Reader",
+      "icon": "\uD83D\uDC41\uFE0F",
+      "category": "system",
+      "description": "\u8bfb\u53d6\u5c4f\u5e55\u5185\u5bb9\uff0c\u8fd4\u56de OCR \u6587\u5b57",
+      "descriptionEn": "Read screen content via OCR",
+      "author": "miru-team",
+      "version": "1.0.0",
+      "source": "miru-registry",
+      "repoUrl": "https://raw.githubusercontent.com/miru-app/skills/main/screen-reader",
+      "riskLevel": "medium",
+      "tags": ["screen", "ocr", "vision", "\u5c4f\u5e55", "\u770b"]
+    }
+  ]
+}

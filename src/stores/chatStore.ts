@@ -1,3 +1,4 @@
+import { startTransition } from 'react'
 import { create } from 'zustand'
 
 export interface Message {
@@ -19,6 +20,8 @@ export interface ToolCall {
 export interface PendingConfirm {
   toolName: string
   params: Record<string, unknown>
+  riskLevel?: 'low' | 'medium' | 'high'
+  description?: string
   onConfirm: () => void
   onCancel: () => void
 }
@@ -41,6 +44,7 @@ interface ChatState {
   toggleChat: () => void
   openChat: () => void
   closeChat: () => void
+  deleteMessage: (id: string) => void
   clearMessages: () => void
   setPendingConfirm: (confirm: PendingConfirm | null) => void
 }
@@ -87,7 +91,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (Array.isArray(saved) && saved.length > 0) {
         set({ messages: saved as Message[] })
       }
-    }).catch(() => { /* ignore */ })
+    }).catch((err) => { console.warn('[Miru] Failed to load chat history:', err) })
   },
 
   addMessage: (msg) => {
@@ -153,10 +157,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
   setPendingPrompt: (pendingPrompt) => set({ pendingPrompt }),
-  toggleChat: () => set((s) => ({ isChatOpen: !s.isChatOpen })),
-  openChat: () => set({ isChatOpen: true }),
+  toggleChat: () => startTransition(() => set((s) => ({ isChatOpen: !s.isChatOpen }))),
+  openChat: () => startTransition(() => set({ isChatOpen: true })),
   closeChat: () => set({ isChatOpen: false }),
+  deleteMessage: (id) => {
+    set((state) => {
+      const messages = state.messages.filter((m) => m.id !== id)
+      persistMessages(messages)
+      return { messages }
+    })
+  },
   clearMessages: () => {
+    if (persistTimer !== null) {
+      clearTimeout(persistTimer)
+      persistTimer = null
+    }
     set({ messages: [] })
     window.electronAPI?.storeSet('chatMessages', [])
   },

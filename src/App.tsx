@@ -1,10 +1,13 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, startTransition } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useConfigStore } from '@/stores/configStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useAdminStore } from '@/stores/adminStore'
 import { memoryStore } from '@/core/memory/store'
+import { useCostStore } from '@/stores/costStore'
 import { registerBuiltinSkills } from '@/core/skills/builtins'
+import { useI18n } from '@/i18n/useI18n'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import Character from '@/components/Character/Character'
 import ChatBubble from '@/components/Chat/ChatBubble'
 import Welcome from '@/components/Onboarding/Welcome'
@@ -13,6 +16,7 @@ import CommandPalette from '@/components/CommandPalette/CommandPalette'
 import ContextMenu from '@/components/ContextMenu/ContextMenu'
 import AdminPanel from '@/components/Admin/AdminPanel'
 import { useMonitor } from '@/hooks/useMonitor'
+import { useScreenTime } from '@/hooks/useScreenTime'
 
 // Register skills once on module load
 registerBuiltinSkills()
@@ -28,9 +32,11 @@ export default function App() {
   const [isCompact, setIsCompact] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [showHint, setShowHint] = useState(() => !localStorage.getItem(HINT_STORAGE_KEY))
+  const { t } = useI18n()
 
   // Activate monitor system
   useMonitor()
+  useScreenTime()
 
   // Initialize persistent stores on mount
   useEffect(() => {
@@ -38,6 +44,7 @@ export default function App() {
     useChatStore.getState().init()
     useAdminStore.getState().init()
     memoryStore.init()
+    useCostStore.getState().initCost()
   }, [])
 
   // Transparent window with transparent:true handles click-through natively —
@@ -92,7 +99,7 @@ export default function App() {
   if (isLoading) {
     return (
       <div className="w-full h-full flex items-center justify-center">
-        <div className="text-white/40 text-sm">Loading...</div>
+        <div className="text-white/40 text-sm">{t('app.loading')}</div>
       </div>
     )
   }
@@ -111,7 +118,9 @@ export default function App() {
       <AnimatePresence>
         {showSettings && !isCompact && (
           <div className="absolute inset-0 flex items-center justify-center z-40 p-4">
-            <SettingsPanel onClose={() => setShowSettings(false)} />
+            <ErrorBoundary>
+              <SettingsPanel onClose={() => setShowSettings(false)} />
+            </ErrorBoundary>
           </div>
         )}
       </AnimatePresence>
@@ -120,7 +129,9 @@ export default function App() {
       <AnimatePresence>
         {isAdminOpen && !isCompact && (
           <div className="absolute inset-0 z-50">
-            <AdminPanel />
+            <ErrorBoundary>
+              <AdminPanel />
+            </ErrorBoundary>
           </div>
         )}
       </AnimatePresence>
@@ -139,10 +150,10 @@ export default function App() {
             x={contextMenu.x}
             y={contextMenu.y}
             onClose={() => setContextMenu(null)}
-            onOpenSettings={() => setShowSettings(true)}
+            onOpenSettings={() => startTransition(() => setShowSettings(true))}
             onToggleCompact={toggleCompact}
             onOpenCommandPalette={() => setShowCommandPalette(true)}
-            onOpenAdmin={() => setAdminOpen(true)}
+            onOpenAdmin={() => startTransition(() => setAdminOpen(true))}
           />
         )}
       </AnimatePresence>
@@ -150,13 +161,17 @@ export default function App() {
       {/* Chat bubble above character — hide in compact mode */}
       {!showSettings && !isCompact && (
         <div className="flex-1 flex items-end justify-center w-full px-4 mb-2">
-          <ChatBubble onOpenSettings={() => setShowSettings(true)} onOpenAdmin={() => setAdminOpen(true)} />
+          <ErrorBoundary>
+            <ChatBubble onOpenSettings={() => startTransition(() => setShowSettings(true))} onOpenAdmin={() => startTransition(() => setAdminOpen(true))} />
+          </ErrorBoundary>
         </div>
       )}
 
       {/* Character at bottom — double click toggles compact, right click opens menu */}
       <div onDoubleClick={toggleCompact} onContextMenu={handleContextMenu} onClick={handleCharacterClick}>
-        <Character />
+        <ErrorBoundary>
+          <Character />
+        </ErrorBoundary>
       </div>
 
       {/* First-use hint below character */}
@@ -169,7 +184,7 @@ export default function App() {
             transition={{ duration: 0.3 }}
             className="text-white/40 text-[10px] mt-1 select-none"
           >
-            左键聊天 · 右键菜单 · / 查看命令
+            {t('app.hint')}
           </motion.p>
         )}
       </AnimatePresence>

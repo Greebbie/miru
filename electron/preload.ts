@@ -63,7 +63,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimizeWindow: () =>
     ipcRenderer.invoke('minimize-window'),
 
-  // Web search
+  // Open URL in default browser
+  openUrl: (url: string) =>
+    ipcRenderer.invoke('open-url', url) as Promise<void>,
+
+  // Web search (legacy API-based, may not work in all regions)
   webSearch: (query: string) =>
     ipcRenderer.invoke('web-search', query) as Promise<{ abstract: string; results: { title: string; snippet: string; url: string }[] }>,
 
@@ -74,6 +78,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onToggleVoice: (callback: () => void) => {
     ipcRenderer.on('toggle-voice', () => callback())
   },
+  offToggleVoice: () => {
+    ipcRenderer.removeAllListeners('toggle-voice')
+  },
 
   // Special paths
   getHomeDir: () =>
@@ -81,7 +88,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Vision
   visionInit: () =>
-    ipcRenderer.invoke('vision-init') as Promise<{ success: boolean }>,
+    ipcRenderer.invoke('vision-init') as Promise<{ success: boolean; error?: string }>,
   visionAnalyze: () =>
     ipcRenderer.invoke('vision-analyze') as Promise<{
       detections: { label: string; confidence: number; bbox: [number, number, number, number] }[]
@@ -90,6 +97,67 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }>,
   visionStatus: () =>
     ipcRenderer.invoke('vision-status') as Promise<{ initialized: boolean }>,
+
+  // Vision: window-targeted
+  getWindowList: () =>
+    ipcRenderer.invoke('get-window-list') as Promise<{ id: string; name: string }[]>,
+  visionAnalyzeWindow: (windowName: string) =>
+    ipcRenderer.invoke('vision-analyze-window', windowName) as Promise<{
+      detections: { label: string; confidence: number; bbox: [number, number, number, number] }[]
+      ocrText: string
+      summary: string
+    }>,
+
+  // Skill Marketplace
+  skillGetDir: () =>
+    ipcRenderer.invoke('skill-get-dir') as Promise<string>,
+  skillScanLocal: () =>
+    ipcRenderer.invoke('skill-scan-local') as Promise<{ id: string; skillMdContent: string; files: string[] }[]>,
+  skillInstall: (opts: { repoUrl: string; skillId: string; files: string[] }) =>
+    ipcRenderer.invoke('skill-install', opts) as Promise<{ success: boolean; skillDir: string }>,
+  skillUninstall: (skillId: string) =>
+    ipcRenderer.invoke('skill-uninstall', skillId) as Promise<void>,
+  skillExecScript: (opts: { skillDir: string; interpreter: string; params: Record<string, string> }) =>
+    ipcRenderer.invoke('skill-exec-script', opts) as Promise<{ stdout: string; stderr: string; exitCode: number }>,
+
+  // STT (Whisper)
+  sttInit: (modelId?: string) =>
+    ipcRenderer.invoke('stt-init', modelId) as Promise<{ success: boolean; error?: string }>,
+  sttTranscribe: (audioData: Float32Array, language?: string) =>
+    ipcRenderer.invoke('stt-transcribe', audioData, language) as Promise<{ text: string; error?: string }>,
+  sttStatus: () =>
+    ipcRenderer.invoke('stt-status') as Promise<{ initialized: boolean }>,
+  sttSwitchModel: (modelId: string) =>
+    ipcRenderer.invoke('stt-switch-model', modelId) as Promise<{ success: boolean; error?: string }>,
+  onSttProgress: (callback: (progress: { status: string; progress?: number; file?: string }) => void) => {
+    ipcRenderer.on('stt-progress', (_event, progress) => callback(progress))
+  },
+  offSttProgress: () => {
+    ipcRenderer.removeAllListeners('stt-progress')
+  },
+
+  // Proxy fetch (bypass CORS for AI providers)
+  proxyFetch: (url: string, options: { method?: string; headers?: Record<string, string>; body?: string }) =>
+    ipcRenderer.invoke('proxy-fetch', url, options) as Promise<{ status: number; body: string }>,
+  proxyStream: (url: string, options: { method?: string; headers?: Record<string, string>; body?: string }) =>
+    ipcRenderer.invoke('proxy-stream', url, options) as Promise<{ streamId: string } | { error: string }>,
+  proxyStreamAbort: (streamId: string) =>
+    ipcRenderer.invoke('proxy-stream-abort', streamId),
+  onProxyStreamData: (callback: (streamId: string, data: string) => void) => {
+    const handler = (_: unknown, id: string, data: string) => callback(id, data)
+    ipcRenderer.on('proxy-stream-data', handler)
+    return () => { ipcRenderer.off('proxy-stream-data', handler) }
+  },
+  onProxyStreamEnd: (callback: (streamId: string) => void) => {
+    const handler = (_: unknown, id: string) => callback(id)
+    ipcRenderer.on('proxy-stream-end', handler)
+    return () => { ipcRenderer.off('proxy-stream-end', handler) }
+  },
+  onProxyStreamError: (callback: (streamId: string, error: string) => void) => {
+    const handler = (_: unknown, id: string, error: string) => callback(id, error)
+    ipcRenderer.on('proxy-stream-error', handler)
+    return () => { ipcRenderer.off('proxy-stream-error', handler) }
+  },
 
   // Persistent store
   storeGet: (key: string) =>

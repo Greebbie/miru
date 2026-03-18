@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useChatStore } from '@/stores/chatStore'
+import { useI18n } from '@/i18n/useI18n'
 
 interface ContextMenuProps {
   x: number
@@ -12,16 +13,17 @@ interface ContextMenuProps {
   onOpenAdmin: () => void
 }
 
-const quickActions = [
-  { label: '整理桌面', prompt: '帮我整理桌面文件，按类型分类' },
-  { label: '清理下载', prompt: '列出下载文件夹中超过30天的文件' },
-  { label: '今天摘要', prompt: '总结一下今天我做了什么' },
-]
-
 export default function ContextMenu({
   x, y, onClose, onOpenSettings, onToggleCompact, onOpenCommandPalette, onOpenAdmin,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
+  const { t } = useI18n()
+
+  const quickActions = [
+    { label: t('ctx.organizeDesktop'), prompt: t('ctx.organizeDesktop') },
+    { label: t('ctx.cleanDownloads'), prompt: t('ctx.cleanDownloads') },
+    { label: t('ctx.todaySummary'), prompt: t('ctx.todaySummary') },
+  ]
 
   // Clamp position to window bounds
   useEffect(() => {
@@ -70,8 +72,7 @@ export default function ContextMenu({
       style={{
         left: x,
         top: y,
-        background: 'rgba(30, 30, 40, 0.9)',
-        backdropFilter: 'blur(16px)',
+        background: 'rgba(30, 30, 40, 0.98)',
         border: '1px solid rgba(255, 255, 255, 0.12)',
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
       }}
@@ -94,7 +95,7 @@ export default function ContextMenu({
         onClick={() => { onOpenCommandPalette(); onClose() }}
         className="w-full px-3 py-1.5 text-left text-xs text-white/80 hover:bg-white/10 transition-colors flex justify-between items-center"
       >
-        <span>命令面板</span>
+        <span>{t('ctx.commandPalette')}</span>
         <span className="text-white/30 text-[10px]">Ctrl+Space</span>
       </button>
 
@@ -102,28 +103,28 @@ export default function ContextMenu({
         onClick={() => { onOpenSettings(); onClose() }}
         className="w-full px-3 py-1.5 text-left text-xs text-white/80 hover:bg-white/10 transition-colors"
       >
-        设置
+        {t('ctx.settings')}
       </button>
 
       <button
         onClick={() => { onToggleCompact(); onClose() }}
         className="w-full px-3 py-1.5 text-left text-xs text-white/80 hover:bg-white/10 transition-colors"
       >
-        紧凑模式
+        {t('ctx.compactMode')}
       </button>
 
       <button
         onClick={() => { onOpenAdmin(); onClose() }}
         className="w-full px-3 py-1.5 text-left text-xs text-white/80 hover:bg-white/10 transition-colors"
       >
-        管理面板
+        {t('ctx.adminPanel')}
       </button>
 
       <button
         onClick={() => { window.electronAPI?.minimizeWindow(); onClose() }}
         className="w-full px-3 py-1.5 text-left text-xs text-white/80 hover:bg-white/10 transition-colors"
       >
-        最小化
+        {t('ctx.minimize')}
       </button>
 
       <div className="my-1 border-t border-white/10" />
@@ -132,12 +133,12 @@ export default function ContextMenu({
         onClick={() => {
           const store = useChatStore.getState()
           store.openChat()
-          store.setPendingPrompt('帮助')
+          store.setPendingPrompt(t('ctx.help'))
           onClose()
         }}
         className="w-full px-3 py-1.5 text-left text-xs text-white/80 hover:bg-white/10 transition-colors"
       >
-        帮助
+        {t('ctx.help')}
       </button>
     </motion.div>
   )

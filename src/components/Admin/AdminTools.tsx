@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { toolRegistry, type ToolDefinition } from '@/core/tools/registry'
 import { useAdminStore, type ToolPermission } from '@/stores/adminStore'
+import { useI18n } from '@/i18n/useI18n'
 
 const RISK_COLORS: Record<string, string> = {
   low: 'bg-green-500/20 text-green-400',
@@ -15,6 +16,7 @@ export default function AdminTools() {
   const permissions = useAdminStore((s) => s.permissions)
   const updatePermission = useAdminStore((s) => s.updatePermission)
   const [expandedTool, setExpandedTool] = useState<string | null>(null)
+  const { t } = useI18n()
 
   function getPerm(toolName: string): ToolPermission {
     const existing = permissions.find((p) => p.toolName === toolName)
@@ -59,12 +61,12 @@ export default function AdminTools() {
     <div className="space-y-1">
       {/* Table header */}
       <div className="grid grid-cols-[1fr_70px_50px_60px_70px_60px] gap-2 px-3 py-2 text-white/30 text-xs border-b border-white/5">
-        <span>Tool</span>
-        <span>Risk</span>
-        <span>On</span>
-        <span>Confirm</span>
-        <span>Limit</span>
-        <span>Calls</span>
+        <span>{t('admin.tools.tool')}</span>
+        <span>{t('admin.tools.risk')}</span>
+        <span>{t('admin.tools.on')}</span>
+        <span>{t('admin.tools.confirm')}</span>
+        <span>{t('admin.tools.limit')}</span>
+        <span>{t('admin.tools.calls')}</span>
       </div>
 
       {/* Tool rows */}
@@ -148,7 +150,7 @@ export default function AdminTools() {
             {isExpanded && showExpand && (
               <div className="ml-8 mr-3 mb-2 p-3 rounded-lg bg-white/5 space-y-2">
                 <div>
-                  <label className="text-white/40 text-xs block mb-1">Allowed Paths (one per line)</label>
+                  <label className="text-white/40 text-xs block mb-1">{t('admin.tools.allowedPaths')}</label>
                   <textarea
                     rows={2}
                     value={(perm.allowedPaths ?? []).join('\n')}
@@ -158,7 +160,7 @@ export default function AdminTools() {
                   />
                 </div>
                 <div>
-                  <label className="text-white/40 text-xs block mb-1">Blocked Paths (one per line)</label>
+                  <label className="text-white/40 text-xs block mb-1">{t('admin.tools.blockedPaths')}</label>
                   <textarea
                     rows={2}
                     value={(perm.blockedPaths ?? []).join('\n')}
@@ -174,7 +176,7 @@ export default function AdminTools() {
       })}
 
       {tools.length === 0 && (
-        <p className="text-white/30 text-xs text-center py-8">No tools registered</p>
+        <p className="text-white/30 text-xs text-center py-8">{t('admin.tools.noTools')}</p>
       )}
     </div>
   )

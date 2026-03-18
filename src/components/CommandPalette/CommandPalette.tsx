@@ -4,6 +4,7 @@ import { skillRegistry } from '@/core/skills/registry'
 import type { SkillDefinition } from '@/core/skills/registry'
 import { useChatStore } from '@/stores/chatStore'
 import { useAI } from '@/hooks/useAI'
+import { useI18n } from '@/i18n/useI18n'
 
 interface CommandPaletteProps {
   onClose: () => void
@@ -14,6 +15,7 @@ export default function CommandPalette({ onClose }: CommandPaletteProps) {
   const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const { sendMessage } = useAI()
+  const { t } = useI18n()
 
   const results = skillRegistry.search(query)
 
@@ -58,12 +60,12 @@ export default function CommandPalette({ onClose }: CommandPaletteProps) {
   )
 
   const categoryLabels: Record<string, string> = {
-    files: '\u6587\u4EF6',
-    apps: '\u5E94\u7528',
-    search: '\u641C\u7D22',
-    create: '\u521B\u5EFA',
-    system: '\u7CFB\u7EDF',
-    custom: '\u81EA\u5B9A\u4E49',
+    files: t('cmd.cat.files'),
+    apps: t('cmd.cat.apps'),
+    search: t('cmd.cat.search'),
+    create: t('cmd.cat.create'),
+    system: t('cmd.cat.system'),
+    custom: t('cmd.cat.custom'),
   }
 
   return (
@@ -82,8 +84,7 @@ export default function CommandPalette({ onClose }: CommandPaletteProps) {
         transition={{ type: 'spring', stiffness: 400, damping: 30 }}
         className="w-[340px] max-h-[360px] rounded-xl overflow-hidden flex flex-col"
         style={{
-          background: 'rgba(30, 30, 40, 0.95)',
-          backdropFilter: 'blur(16px)',
+          background: 'rgba(30, 30, 40, 0.98)',
           border: '1px solid rgba(255, 255, 255, 0.1)',
           boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5)',
         }}
@@ -95,13 +96,13 @@ export default function CommandPalette({ onClose }: CommandPaletteProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search skills... / \u641C\u7D22\u80FD\u529B..."
+            placeholder={t('cmd.search')}
             className="w-full bg-white/5 text-white text-sm rounded-lg px-3 py-2 outline-none placeholder:text-white/30"
           />
         </div>
         <div className="overflow-y-auto flex-1">
           {results.length === 0 ? (
-            <div className="text-center text-white/30 text-sm py-6">No matches</div>
+            <div className="text-center text-white/30 text-sm py-6">{t('cmd.noMatch')}</div>
           ) : (
             results.map((skill, i) => (
               <button

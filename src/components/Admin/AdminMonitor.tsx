@@ -1,20 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAdminStore, type MonitorRule } from '@/stores/adminStore'
+import { useI18n } from '@/i18n/useI18n'
 
 type TriggerType = MonitorRule['trigger']['type']
 type ActionType = MonitorRule['action']['type']
-
-const TRIGGER_TYPES: { id: TriggerType; label: string }[] = [
-  { id: 'app_focus', label: 'App Focus' },
-  { id: 'window_title', label: 'Window Title' },
-]
-
-const ACTION_TYPES: { id: ActionType; label: string }[] = [
-  { id: 'notify', label: 'Notify' },
-  { id: 'auto_reply', label: 'Auto Reply' },
-  { id: 'run_tool', label: 'Run Tool' },
-  { id: 'run_skill', label: 'Run Skill' },
-]
 
 interface FormState {
   name: string
@@ -24,6 +13,8 @@ interface FormState {
   actionType: ActionType
   payload: string
   cooldownMs: number
+  visionIntervalMs: number
+  targetWindow: string
 }
 
 const EMPTY_FORM: FormState = {
@@ -34,53 +25,130 @@ const EMPTY_FORM: FormState = {
   actionType: 'notify',
   payload: '',
   cooldownMs: 60000,
+  visionIntervalMs: 10000,
+  targetWindow: '',
 }
-
-const PRESETS: { label: string; form: FormState }[] = [
-  {
-    label: '监控微信',
-    form: {
-      name: '微信消息监控',
-      triggerType: 'window_title',
-      pattern: '微信',
-      app: 'WeChat',
-      actionType: 'notify',
-      payload: '收到微信消息',
-      cooldownMs: 30000,
-    },
-  },
-  {
-    label: '监控 Discord',
-    form: {
-      name: 'Discord 消息监控',
-      triggerType: 'app_focus',
-      pattern: 'Discord',
-      app: 'Discord',
-      actionType: 'notify',
-      payload: 'Discord activity detected',
-      cooldownMs: 60000,
-    },
-  },
-]
 
 export default function AdminMonitor() {
   const monitorRules = useAdminStore((s) => s.monitorRules)
   const addMonitorRule = useAdminStore((s) => s.addMonitorRule)
   const updateMonitorRule = useAdminStore((s) => s.updateMonitorRule)
   const deleteMonitorRule = useAdminStore((s) => s.deleteMonitorRule)
+  const { t } = useI18n()
 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
+  const [windowList, setWindowList] = useState<{ id: string; name: string }[]>([])
+  const [loadingWindows, setLoadingWindows] = useState(false)
+
+  const TRIGGER_TYPES: { id: TriggerType; label: string }[] = [
+    { id: 'app_focus', label: 'App Focus' },
+    { id: 'window_title', label: 'Window Title' },
+    { id: 'content_change', label: t('admin.monitor.triggerContentChange') },
+  ]
+
+  const ACTION_TYPES: { id: ActionType; label: string }[] = [
+    { id: 'notify', label: 'Notify' },
+    { id: 'auto_reply', label: 'Auto Reply' },
+    { id: 'run_tool', label: 'Run Tool' },
+    { id: 'run_skill', label: 'Run Skill' },
+    { id: 'send_keys_to_app', label: t('admin.monitor.actionSendKeys') },
+  ]
+
+  const PRESETS: { label: string; form: FormState }[] = [
+    {
+      label: t('admin.monitor.watchWeChat'),
+      form: {
+        name: t('admin.monitor.watchWeChat'),
+        triggerType: 'window_title',
+        pattern: '微信',
+        app: 'WeChat',
+        actionType: 'notify',
+        payload: '收到微信消息',
+        cooldownMs: 30000,
+        visionIntervalMs: 10000,
+        targetWindow: '',
+      },
+    },
+    {
+      label: t('admin.monitor.watchDiscord'),
+      form: {
+        name: t('admin.monitor.watchDiscord'),
+        triggerType: 'app_focus',
+        pattern: 'Discord',
+        app: 'Discord',
+        actionType: 'notify',
+        payload: 'Discord activity detected',
+        cooldownMs: 60000,
+        visionIntervalMs: 10000,
+        targetWindow: '',
+      },
+    },
+    {
+      label: t('admin.monitor.presetWeChatVision'),
+      form: {
+        name: '微信消息监控',
+        triggerType: 'content_change',
+        pattern: '.*',
+        app: '',
+        actionType: 'notify',
+        payload: '检测到微信新消息',
+        cooldownMs: 30000,
+        visionIntervalMs: 10000,
+        targetWindow: '微信',
+      },
+    },
+    {
+      label: t('admin.monitor.presetCLIBabysit'),
+      form: {
+        name: 'CLI 值守',
+        triggerType: 'content_change',
+        pattern: '(completed|finished|done|idle|Plan|plan mode)',
+        app: '',
+        actionType: 'send_keys_to_app',
+        payload: '/implement{ENTER}',
+        cooldownMs: 120000,
+        visionIntervalMs: 15000,
+        targetWindow: 'Terminal',
+      },
+    },
+  ]
+
+  const refreshWindows = useCallback(async () => {
+    if (!window.electronAPI?.getWindowList) return
+    setLoadingWindows(true)
+    try {
+      const list = await window.electronAPI.getWindowList()
+      setWindowList(list)
+    } catch {
+      setWindowList([])
+    } finally {
+      setLoadingWindows(false)
+    }
+  }, [])
+
+  // Auto-fetch window list when switching to content_change
+  useEffect(() => {
+    if (form.triggerType === 'content_change' && windowList.length === 0) {
+      refreshWindows()
+    }
+  }, [form.triggerType, windowList.length, refreshWindows])
 
   function handleSubmit() {
     if (!form.name || !form.pattern) return
+
+    const triggerApp = form.triggerType === 'content_change'
+      ? form.targetWindow
+      : form.app
+
     addMonitorRule({
       name: form.name,
       enabled: true,
       trigger: {
         type: form.triggerType,
         pattern: form.pattern,
-        app: form.app || undefined,
+        app: triggerApp || undefined,
+        ...(form.triggerType === 'content_change' ? { visionIntervalMs: form.visionIntervalMs } : {}),
       },
       action: {
         type: form.actionType,
@@ -97,10 +165,13 @@ export default function AdminMonitor() {
     setShowForm(true)
   }
 
+  const isContentChange = form.triggerType === 'content_change'
+  const isSendKeys = form.actionType === 'send_keys_to_app'
+
   return (
     <div className="space-y-3">
       {/* Preset quick-add */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {PRESETS.map((p) => (
           <button
             key={p.label}
@@ -125,12 +196,23 @@ export default function AdminMonitor() {
                 <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 shrink-0">
                   {rule.trigger.type}
                 </span>
+                {rule.trigger.type === 'content_change' && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 shrink-0">
+                    Vision
+                  </span>
+                )}
                 <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 shrink-0">
                   {rule.action.type}
                 </span>
               </div>
               <div className="text-white/30 text-xs mt-0.5 truncate">
+                {rule.trigger.type === 'content_change' && rule.trigger.app && (
+                  <span className="text-cyan-400/60">[{rule.trigger.app}] </span>
+                )}
                 Pattern: {rule.trigger.pattern} | Payload: {rule.action.payload}
+                {rule.trigger.visionIntervalMs && (
+                  <span className="text-white/20"> | {rule.trigger.visionIntervalMs / 1000}s</span>
+                )}
               </div>
             </div>
 
@@ -159,7 +241,7 @@ export default function AdminMonitor() {
         ))}
 
         {monitorRules.length === 0 && !showForm && (
-          <p className="text-white/30 text-xs text-center py-6">No monitor rules yet</p>
+          <p className="text-white/30 text-xs text-center py-6">{t('admin.monitor.noRules')}</p>
         )}
       </div>
 
@@ -168,7 +250,7 @@ export default function AdminMonitor() {
         <div className="p-3 rounded-lg bg-white/5 border border-white/10 space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-white/40 text-xs block mb-1">Rule Name</label>
+              <label className="text-white/40 text-xs block mb-1">{t('admin.monitor.ruleName')}</label>
               <input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -177,7 +259,46 @@ export default function AdminMonitor() {
               />
             </div>
             <div>
-              <label className="text-white/40 text-xs block mb-1">App (optional)</label>
+              <label className="text-white/40 text-xs block mb-1">{t('admin.monitor.triggerType')}</label>
+              <select
+                value={form.triggerType}
+                onChange={(e) => setForm({ ...form, triggerType: e.target.value as TriggerType })}
+                className="admin-input"
+              >
+                {TRIGGER_TYPES.map((tt) => (
+                  <option key={tt.id} value={tt.id}>{tt.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Window selector for content_change */}
+          {isContentChange ? (
+            <div>
+              <label className="text-white/40 text-xs block mb-1">{t('admin.monitor.targetWindow')}</label>
+              <div className="flex gap-2">
+                <select
+                  value={form.targetWindow}
+                  onChange={(e) => setForm({ ...form, targetWindow: e.target.value })}
+                  className="admin-input flex-1"
+                >
+                  <option value="">{t('admin.monitor.noWindows')}</option>
+                  {windowList.map((w) => (
+                    <option key={w.id} value={w.name}>{w.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={refreshWindows}
+                  disabled={loadingWindows}
+                  className="px-2 py-1 rounded text-xs bg-white/10 text-white/50 hover:bg-white/15 hover:text-white/70 transition-colors shrink-0"
+                >
+                  {loadingWindows ? '...' : t('admin.monitor.refreshWindows')}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="text-white/40 text-xs block mb-1">{t('admin.monitor.app')}</label>
               <input
                 value={form.app}
                 onChange={(e) => setForm({ ...form, app: e.target.value })}
@@ -185,78 +306,80 @@ export default function AdminMonitor() {
                 className="admin-input"
               />
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-white/40 text-xs block mb-1">Trigger Type</label>
-              <select
-                value={form.triggerType}
-                onChange={(e) => setForm({ ...form, triggerType: e.target.value as TriggerType })}
-                className="admin-input"
-              >
-                {TRIGGER_TYPES.map((t) => (
-                  <option key={t.id} value={t.id}>{t.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-white/40 text-xs block mb-1">Pattern</label>
+              <label className="text-white/40 text-xs block mb-1">{t('admin.monitor.pattern')}</label>
               <input
                 value={form.pattern}
                 onChange={(e) => setForm({ ...form, pattern: e.target.value })}
-                placeholder="regex or cron..."
+                placeholder={isContentChange ? '.*  or  keyword|regex' : 'regex or keyword...'}
                 className="admin-input"
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-white/40 text-xs block mb-1">Action Type</label>
+              <label className="text-white/40 text-xs block mb-1">{t('admin.monitor.actionType')}</label>
               <select
                 value={form.actionType}
                 onChange={(e) => setForm({ ...form, actionType: e.target.value as ActionType })}
                 className="admin-input"
               >
-                {ACTION_TYPES.map((t) => (
-                  <option key={t.id} value={t.id}>{t.label}</option>
+                {ACTION_TYPES.map((at) => (
+                  <option key={at.id} value={at.id}>{at.label}</option>
                 ))}
               </select>
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-white/40 text-xs block mb-1">Payload</label>
+              <label className="text-white/40 text-xs block mb-1">{t('admin.monitor.payload')}</label>
               <input
                 value={form.payload}
                 onChange={(e) => setForm({ ...form, payload: e.target.value })}
-                placeholder="Message or tool name..."
+                placeholder={isSendKeys ? t('admin.monitor.payloadHintKeys') : 'Message or tool name...'}
+                className="admin-input"
+              />
+            </div>
+            <div>
+              <label className="text-white/40 text-xs block mb-1">{t('admin.monitor.cooldown')}</label>
+              <input
+                type="number"
+                value={form.cooldownMs}
+                onChange={(e) => setForm({ ...form, cooldownMs: parseInt(e.target.value) || 0 })}
                 className="admin-input"
               />
             </div>
           </div>
 
-          <div>
-            <label className="text-white/40 text-xs block mb-1">Cooldown (ms)</label>
-            <input
-              type="number"
-              value={form.cooldownMs}
-              onChange={(e) => setForm({ ...form, cooldownMs: parseInt(e.target.value) || 0 })}
-              className="admin-input w-40"
-            />
-          </div>
+          {/* Vision interval for content_change */}
+          {isContentChange && (
+            <div>
+              <label className="text-white/40 text-xs block mb-1">{t('admin.monitor.visionInterval')}</label>
+              <input
+                type="number"
+                value={form.visionIntervalMs}
+                onChange={(e) => setForm({ ...form, visionIntervalMs: parseInt(e.target.value) || 10000 })}
+                className="admin-input w-40"
+                min={5000}
+                step={1000}
+              />
+            </div>
+          )}
 
           <div className="flex gap-2 pt-1">
             <button
               onClick={handleSubmit}
               className="px-4 py-1.5 rounded-lg text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
             >
-              Add Rule
+              {t('admin.monitor.addRule')}
             </button>
             <button
               onClick={() => { setShowForm(false); setForm(EMPTY_FORM) }}
               className="px-4 py-1.5 rounded-lg text-xs bg-white/5 text-white/40 hover:bg-white/10 transition-colors"
             >
-              Cancel
+              {t('admin.monitor.cancel')}
             </button>
           </div>
         </div>
@@ -265,7 +388,7 @@ export default function AdminMonitor() {
           onClick={() => setShowForm(true)}
           className="w-full py-2 rounded-lg text-xs bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60 transition-colors border border-dashed border-white/10"
         >
-          + Add Rule
+          {t('admin.monitor.add')}
         </button>
       )}
 

@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { exec } from 'child_process'
+import { execFile } from 'child_process'
 import os from 'os'
 
 export function setupAutomation() {
@@ -9,10 +9,11 @@ export function setupAutomation() {
       if (os.platform() !== 'win32') {
         return reject(new Error('SendKeys only supported on Windows'))
       }
-      // Sanitize keys to prevent injection
-      const sanitized = keys.replace(/["`]/g, '')
+      // Use execFile with -Command arg to avoid shell injection
+      // Escape single quotes for PowerShell string literal
+      const sanitized = keys.replace(/'/g, "''")
       const script = `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('${sanitized}')`
-      exec(`powershell -command "${script}"`, { timeout: 5000 }, (err) => {
+      execFile('powershell', ['-NoProfile', '-Command', script], { timeout: 5000 }, (err) => {
         if (err) reject(new Error('SendKeys failed'))
         else resolve()
       })
@@ -25,7 +26,8 @@ export function setupAutomation() {
       if (os.platform() !== 'win32') {
         return reject(new Error('focus-window only supported on Windows'))
       }
-      const sanitized = processName.replace(/["`$]/g, '')
+      // Escape single quotes for PowerShell string literal
+      const sanitized = processName.replace(/'/g, "''")
       const script = `
         $proc = Get-Process -Name '${sanitized}' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
         if ($proc) {
@@ -40,8 +42,8 @@ public class WinAPI {
           [WinAPI]::ShowWindow($proc.MainWindowHandle, 9)
           [WinAPI]::SetForegroundWindow($proc.MainWindowHandle)
         }
-      `.replace(/\n/g, '; ')
-      exec(`powershell -command "${script}"`, { timeout: 5000 }, (err) => {
+      `
+      execFile('powershell', ['-NoProfile', '-Command', script], { timeout: 5000 }, (err) => {
         if (err) reject(new Error('focus-window failed'))
         else resolve()
       })

@@ -1,4 +1,5 @@
 import { toolRegistry } from './registry'
+import { humanizeError } from '@/core/errors/humanize'
 
 toolRegistry.register({
   name: 'list_files',
@@ -26,7 +27,7 @@ toolRegistry.register({
         summary: `${files.length} items: ${dirs} folders, ${regular} files`,
       }
     } catch (err) {
-      return { success: false, data: null, summary: `Failed: ${(err as Error).message}` }
+      return { success: false, data: null, summary: humanizeError(err, 'auto') }
     }
   },
 })
@@ -56,7 +57,7 @@ toolRegistry.register({
         summary: `${lines} lines, ${content.length} chars`,
       }
     } catch (err) {
-      return { success: false, data: null, summary: `Failed: ${(err as Error).message}` }
+      return { success: false, data: null, summary: humanizeError(err, 'auto') }
     }
   },
 })
@@ -81,7 +82,7 @@ toolRegistry.register({
       await window.electronAPI.createDirectory(params.path as string)
       return { success: true, data: null, summary: 'Directory created' }
     } catch (err) {
-      return { success: false, data: null, summary: `Failed: ${(err as Error).message}` }
+      return { success: false, data: null, summary: humanizeError(err, 'auto') }
     }
   },
 })
@@ -107,7 +108,7 @@ toolRegistry.register({
       await window.electronAPI.moveFiles(params.from as string, params.to as string)
       return { success: true, data: null, summary: `Moved to ${params.to}` }
     } catch (err) {
-      return { success: false, data: null, summary: `Failed: ${(err as Error).message}` }
+      return { success: false, data: null, summary: humanizeError(err, 'auto') }
     }
   },
 })
@@ -132,7 +133,7 @@ toolRegistry.register({
       await window.electronAPI.deleteFiles(params.path as string)
       return { success: true, data: null, summary: 'Deleted' }
     } catch (err) {
-      return { success: false, data: null, summary: `Failed: ${(err as Error).message}` }
+      return { success: false, data: null, summary: humanizeError(err, 'auto') }
     }
   },
 })
@@ -158,7 +159,7 @@ toolRegistry.register({
       await window.electronAPI.writeFile(params.path as string, params.content as string)
       return { success: true, data: null, summary: `Written to ${params.path}` }
     } catch (err) {
-      return { success: false, data: null, summary: `Failed: ${(err as Error).message}` }
+      return { success: false, data: null, summary: humanizeError(err, 'auto') }
     }
   },
 })
@@ -184,7 +185,7 @@ toolRegistry.register({
       await window.electronAPI.copyFiles(params.from as string, params.to as string)
       return { success: true, data: null, summary: `Copied to ${params.to}` }
     } catch (err) {
-      return { success: false, data: null, summary: `Failed: ${(err as Error).message}` }
+      return { success: false, data: null, summary: humanizeError(err, 'auto') }
     }
   },
 })
@@ -214,7 +215,7 @@ toolRegistry.register({
         summary: `Found ${results.length} matches`,
       }
     } catch (err) {
-      return { success: false, data: null, summary: `Failed: ${(err as Error).message}` }
+      return { success: false, data: null, summary: humanizeError(err, 'auto') }
     }
   },
 })

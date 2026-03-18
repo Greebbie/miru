@@ -1,4 +1,5 @@
 import { toolRegistry } from './registry'
+import { humanizeError } from '@/core/errors/humanize'
 
 toolRegistry.register({
   name: 'run_shell',
@@ -19,21 +20,15 @@ toolRegistry.register({
     try {
       const command = params.command as string
       const { stdout, stderr } = await window.electronAPI.runShell(command)
-      if (stderr) {
-        return {
-          success: false,
-          data: { stderr },
-          summary: `Error: ${stderr.slice(0, 100)}`,
-        }
-      }
-      const lines = stdout.split('\n').length
+      const output = stdout || ''
+      const lines = output.split('\n').length
       return {
         success: true,
-        data: { stdout },
-        summary: `OK, ${lines} lines output`,
+        data: { stdout: output, stderr: stderr || '' },
+        summary: `OK, ${lines} lines output${stderr ? ' (with warnings)' : ''}`,
       }
     } catch (err) {
-      return { success: false, data: null, summary: `Failed: ${(err as Error).message}` }
+      return { success: false, data: null, summary: humanizeError(err, 'auto') }
     }
   },
 })

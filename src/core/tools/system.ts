@@ -1,4 +1,5 @@
 import { toolRegistry } from './registry'
+import { humanizeError } from '@/core/errors/humanize'
 
 toolRegistry.register({
   name: 'get_system_info',
@@ -31,7 +32,7 @@ toolRegistry.register({
         summary: parts.join(' | '),
       }
     } catch (err) {
-      return { success: false, data: null, summary: `Failed: ${(err as Error).message}` }
+      return { success: false, data: null, summary: humanizeError(err, 'auto') }
     }
   },
 })

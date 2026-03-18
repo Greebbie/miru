@@ -1,4 +1,5 @@
 import type { ToolCall } from '@/stores/chatStore'
+import { useI18n } from '@/i18n/useI18n'
 
 const statusStyles: Record<ToolCall['status'], string> = {
   pending: 'bg-white/10 text-white/50',
@@ -14,6 +15,7 @@ interface ToolCallBadgeProps {
 }
 
 export default function ToolCallBadge({ toolCall, onRetry }: ToolCallBadgeProps) {
+  const { t } = useI18n()
   const style = statusStyles[toolCall.status]
   const isRunning = toolCall.status === 'running'
 
@@ -24,16 +26,16 @@ export default function ToolCallBadge({ toolCall, onRetry }: ToolCallBadgeProps)
       )}
       <span className="font-mono">{toolCall.name}</span>
       {toolCall.status === 'done' && toolCall.result && (
-        <span className="max-w-[120px] truncate opacity-70">{toolCall.result.summary}</span>
+        <span className="max-w-[180px] truncate opacity-70" title={toolCall.result.summary}>{toolCall.result.summary}</span>
       )}
       {toolCall.status === 'error' && toolCall.result && (
-        <span className="max-w-[120px] truncate opacity-70">{toolCall.result.summary}</span>
+        <span className="max-w-[180px] truncate opacity-70" title={toolCall.result.summary}>{toolCall.result.summary}</span>
       )}
       {toolCall.status === 'error' && onRetry && (
         <button
           onClick={onRetry}
           className="ml-0.5 hover:opacity-100 opacity-70 transition-opacity"
-          title="重试"
+          title={t('tool.retry')}
         >
           {'\u21BB'}
         </button>

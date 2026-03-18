@@ -15,6 +15,8 @@ export interface ExpressionStyle {
   glowIntensity: number
   /** CSS brightness filter (1 = normal) */
   brightness: number
+  /** Whether eyes should track mouse */
+  eyesActive: boolean
 }
 
 export const expressionMap: Record<AnimationState, ExpressionStyle> = {
@@ -26,6 +28,7 @@ export const expressionMap: Record<AnimationState, ExpressionStyle> = {
     glowColor: '#A8E8C8',
     glowIntensity: 0.3,
     brightness: 1,
+    eyesActive: true,
   },
   curious: {
     breathSpeed: 2,
@@ -35,6 +38,7 @@ export const expressionMap: Record<AnimationState, ExpressionStyle> = {
     glowColor: '#A8E8C8',
     glowIntensity: 0.5,
     brightness: 1.05,
+    eyesActive: true,
   },
   focused: {
     breathSpeed: 4,
@@ -44,6 +48,7 @@ export const expressionMap: Record<AnimationState, ExpressionStyle> = {
     glowColor: '#7EC8E3',
     glowIntensity: 0.3,
     brightness: 0.95,
+    eyesActive: true,
   },
   happy: {
     breathSpeed: 1.8,
@@ -53,6 +58,7 @@ export const expressionMap: Record<AnimationState, ExpressionStyle> = {
     glowColor: '#FFD700',
     glowIntensity: 0.6,
     brightness: 1.1,
+    eyesActive: true,
   },
   concerned: {
     breathSpeed: 2.5,
@@ -62,6 +68,7 @@ export const expressionMap: Record<AnimationState, ExpressionStyle> = {
     glowColor: '#B0C4DE',
     glowIntensity: 0.3,
     brightness: 0.9,
+    eyesActive: true,
   },
   yawning: {
     breathSpeed: 5,
@@ -71,6 +78,7 @@ export const expressionMap: Record<AnimationState, ExpressionStyle> = {
     glowColor: '#C8B0E8',
     glowIntensity: 0.2,
     brightness: 0.85,
+    eyesActive: false,
   },
   sleepy: {
     breathSpeed: 6,
@@ -80,5 +88,6 @@ export const expressionMap: Record<AnimationState, ExpressionStyle> = {
     glowColor: '#9BB0C9',
     glowIntensity: 0.15,
     brightness: 0.75,
+    eyesActive: false,
   },
 }

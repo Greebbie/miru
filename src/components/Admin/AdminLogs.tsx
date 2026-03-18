@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAdminStore, type AuditEntry } from '@/stores/adminStore'
+import { useI18n } from '@/i18n/useI18n'
 
 export default function AdminLogs() {
   const auditLog = useAdminStore((s) => s.auditLog)
   const clearAuditLog = useAdminStore((s) => s.clearAuditLog)
+  const { t } = useI18n()
 
   const [filterTool, setFilterTool] = useState<string>('')
   const [filterSuccess, setFilterSuccess] = useState<'' | 'true' | 'false'>('')
@@ -56,7 +58,7 @@ export default function AdminLogs() {
           onChange={(e) => setFilterTool(e.target.value)}
           className="log-select"
         >
-          <option value="">All Tools</option>
+          <option value="">{t('admin.logs.allTools')}</option>
           {toolNames.map((name) => (
             <option key={name} value={name}>{name}</option>
           ))}
@@ -67,30 +69,30 @@ export default function AdminLogs() {
           onChange={(e) => setFilterSuccess(e.target.value as '' | 'true' | 'false')}
           className="log-select"
         >
-          <option value="">All Results</option>
-          <option value="true">Success</option>
-          <option value="false">Failed</option>
+          <option value="">{t('admin.logs.allResults')}</option>
+          <option value="true">{t('admin.logs.success')}</option>
+          <option value="false">{t('admin.logs.failed')}</option>
         </select>
 
         <div className="flex-1" />
 
-        <span className="text-white/30 text-xs">{filteredLog.length} entries</span>
+        <span className="text-white/30 text-xs">{filteredLog.length} {t('admin.logs.entries')}</span>
 
         <button
           onClick={clearAuditLog}
           className="px-3 py-1 rounded-lg text-xs bg-red-500/10 text-red-400/60 hover:bg-red-500/20 hover:text-red-400 transition-colors"
         >
-          Clear
+          {t('admin.logs.clear')}
         </button>
       </div>
 
       {/* Table header */}
       <div className="grid grid-cols-[100px_90px_1fr_1fr_60px] gap-2 px-3 py-1.5 text-white/30 text-xs border-b border-white/5">
-        <span>Time</span>
-        <span>Tool</span>
-        <span>Params</span>
-        <span>Result</span>
-        <span>ms</span>
+        <span>{t('admin.logs.time')}</span>
+        <span>{t('admin.logs.tool')}</span>
+        <span>{t('admin.logs.params')}</span>
+        <span>{t('admin.logs.result')}</span>
+        <span>{t('admin.logs.ms')}</span>
       </div>
 
       {/* Log entries */}
@@ -103,7 +105,7 @@ export default function AdminLogs() {
         ))}
 
         {filteredLog.length === 0 && (
-          <p className="text-white/30 text-xs text-center py-8">No log entries</p>
+          <p className="text-white/30 text-xs text-center py-8">{t('admin.logs.noEntries')}</p>
         )}
       </div>
 

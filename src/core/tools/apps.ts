@@ -1,4 +1,5 @@
 import { toolRegistry } from './registry'
+import { humanizeError } from '@/core/errors/humanize'
 
 toolRegistry.register({
   name: 'open_app',
@@ -21,7 +22,7 @@ toolRegistry.register({
       await window.electronAPI.openApp(appName)
       return { success: true, data: null, summary: `Opened ${appName}` }
     } catch (err) {
-      return { success: false, data: null, summary: `Cannot open: ${(err as Error).message}` }
+      return { success: false, data: null, summary: humanizeError(err, 'auto') }
     }
   },
 })

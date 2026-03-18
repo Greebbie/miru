@@ -22,7 +22,10 @@ const PRICING: Record<string, Record<string, [number, number]>> = {
     'qwen-plus': [0.8, 2],
   },
   minimax: {
-    'abab6.5-chat': [0.5, 1.5],
+    'MiniMax-M2.5': [0.3, 1.1],
+    'MiniMax-M1': [0.5, 1.5],
+    'MiniMax-Text-01': [0.5, 1.5],
+    'abab6.5s-chat': [0.5, 1.5],
   },
 }
 

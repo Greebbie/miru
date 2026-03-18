@@ -44,6 +44,9 @@ export interface ElectronAPI {
   // Minimize (hide to tray)
   minimizeWindow: () => Promise<void>
 
+  // Open URL in default browser
+  openUrl: (url: string) => Promise<void>
+
   // Web search
   webSearch: (query: string) => Promise<{
     abstract: string
@@ -51,7 +54,7 @@ export interface ElectronAPI {
   }>
 
   // Vision
-  visionInit: () => Promise<{ success: boolean }>
+  visionInit: () => Promise<{ success: boolean; error?: string }>
   visionAnalyze: () => Promise<{
     detections: { label: string; confidence: number; bbox: [number, number, number, number] }[]
     ocrText: string
@@ -59,9 +62,41 @@ export interface ElectronAPI {
   }>
   visionStatus: () => Promise<{ initialized: boolean }>
 
+  // Vision: window-targeted
+  getWindowList: () => Promise<{ id: string; name: string }[]>
+  visionAnalyzeWindow: (windowName: string) => Promise<{
+    detections: { label: string; confidence: number; bbox: [number, number, number, number] }[]
+    ocrText: string
+    summary: string
+  }>
+
+  // Skill Marketplace
+  skillGetDir: () => Promise<string>
+  skillScanLocal: () => Promise<{ id: string; skillMdContent: string; files: string[] }[]>
+  skillInstall: (opts: { repoUrl: string; skillId: string; files: string[] }) => Promise<{ success: boolean; skillDir: string }>
+  skillUninstall: (skillId: string) => Promise<void>
+  skillExecScript: (opts: { skillDir: string; interpreter: string; params: Record<string, string> }) => Promise<{ stdout: string; stderr: string; exitCode: number }>
+
+  // STT (Whisper)
+  sttInit: (modelId?: string) => Promise<{ success: boolean; error?: string }>
+  sttTranscribe: (audioData: Float32Array, language?: string) => Promise<{ text: string; error?: string }>
+  sttStatus: () => Promise<{ initialized: boolean }>
+  sttSwitchModel: (modelId: string) => Promise<{ success: boolean; error?: string }>
+  onSttProgress: (callback: (progress: { status: string; progress?: number; file?: string }) => void) => void
+  offSttProgress: () => void
+
   // IPC event listeners
   onToggleCommandPalette: (callback: () => void) => void
   onToggleVoice: (callback: () => void) => void
+  offToggleVoice: () => void
+
+  // Proxy fetch (bypass CORS)
+  proxyFetch: (url: string, options: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<{ status: number; body: string }>
+  proxyStream: (url: string, options: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<{ streamId: string } | { error: string }>
+  proxyStreamAbort: (streamId: string) => Promise<void>
+  onProxyStreamData: (callback: (streamId: string, data: string) => void) => () => void
+  onProxyStreamEnd: (callback: (streamId: string) => void) => () => void
+  onProxyStreamError: (callback: (streamId: string, error: string) => void) => () => void
 
   // Persistent store IPC
   storeGet: (key: string) => Promise<unknown>

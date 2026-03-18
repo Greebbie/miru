@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAdminStore, type AutoReplyRule } from '@/stores/adminStore'
+import { useI18n } from '@/i18n/useI18n'
 
 type AppType = AutoReplyRule['app']
 
@@ -46,6 +47,7 @@ export default function AdminAutoReply() {
   const addAutoReplyRule = useAdminStore((s) => s.addAutoReplyRule)
   const updateAutoReplyRule = useAdminStore((s) => s.updateAutoReplyRule)
   const deleteAutoReplyRule = useAdminStore((s) => s.deleteAutoReplyRule)
+  const { t } = useI18n()
 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
@@ -142,7 +144,7 @@ export default function AdminAutoReply() {
         ))}
 
         {autoReplyRules.length === 0 && !showForm && (
-          <p className="text-white/30 text-xs text-center py-6">No auto-reply rules yet</p>
+          <p className="text-white/30 text-xs text-center py-6">{t('admin.ar.noRules')}</p>
         )}
       </div>
 
@@ -151,7 +153,7 @@ export default function AdminAutoReply() {
         <div className="p-3 rounded-lg bg-white/5 border border-white/10 space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-white/40 text-xs block mb-1">Rule Name</label>
+              <label className="text-white/40 text-xs block mb-1">{t('admin.ar.ruleName')}</label>
               <input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -160,7 +162,7 @@ export default function AdminAutoReply() {
               />
             </div>
             <div>
-              <label className="text-white/40 text-xs block mb-1">App</label>
+              <label className="text-white/40 text-xs block mb-1">{t('admin.ar.app')}</label>
               <select
                 value={form.app}
                 onChange={(e) => setForm({ ...form, app: e.target.value as AppType })}
@@ -175,7 +177,7 @@ export default function AdminAutoReply() {
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-white/40 text-xs block mb-1">Contact Pattern</label>
+              <label className="text-white/40 text-xs block mb-1">{t('admin.ar.contactPattern')}</label>
               <input
                 value={form.contactPattern}
                 onChange={(e) => setForm({ ...form, contactPattern: e.target.value })}
@@ -184,7 +186,7 @@ export default function AdminAutoReply() {
               />
             </div>
             <div>
-              <label className="text-white/40 text-xs block mb-1">Trigger Keywords (comma sep)</label>
+              <label className="text-white/40 text-xs block mb-1">{t('admin.ar.triggerKeywords')}</label>
               <input
                 value={form.triggerKeywords}
                 onChange={(e) => setForm({ ...form, triggerKeywords: e.target.value })}
@@ -202,7 +204,7 @@ export default function AdminAutoReply() {
                 onChange={(e) => setForm({ ...form, useAI: e.target.checked })}
                 className="accent-blue-400"
               />
-              <span className="text-white/60 text-xs">Use AI reply</span>
+              <span className="text-white/60 text-xs">{t('admin.ar.useAI')}</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -211,13 +213,13 @@ export default function AdminAutoReply() {
                 onChange={(e) => setForm({ ...form, requireConfirm: e.target.checked })}
                 className="accent-yellow-400"
               />
-              <span className="text-white/60 text-xs">Require confirm</span>
+              <span className="text-white/60 text-xs">{t('admin.ar.requireConfirm')}</span>
             </label>
           </div>
 
           {!form.useAI && (
             <div>
-              <label className="text-white/40 text-xs block mb-1">Reply Template</label>
+              <label className="text-white/40 text-xs block mb-1">{t('admin.ar.replyTemplate')}</label>
               <textarea
                 rows={2}
                 value={form.replyTemplate}
@@ -229,7 +231,7 @@ export default function AdminAutoReply() {
           )}
 
           <div>
-            <label className="text-white/40 text-xs block mb-1">Idle Minutes (trigger after idle)</label>
+            <label className="text-white/40 text-xs block mb-1">{t('admin.ar.idleMinutes')}</label>
             <input
               type="number"
               min={0}
@@ -244,13 +246,13 @@ export default function AdminAutoReply() {
               onClick={handleSubmit}
               className="px-4 py-1.5 rounded-lg text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
             >
-              Add Rule
+              {t('admin.ar.addRule')}
             </button>
             <button
               onClick={() => { setShowForm(false); setForm(EMPTY_FORM) }}
               className="px-4 py-1.5 rounded-lg text-xs bg-white/5 text-white/40 hover:bg-white/10 transition-colors"
             >
-              Cancel
+              {t('admin.ar.cancel')}
             </button>
           </div>
         </div>
@@ -259,7 +261,7 @@ export default function AdminAutoReply() {
           onClick={() => setShowForm(true)}
           className="w-full py-2 rounded-lg text-xs bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60 transition-colors border border-dashed border-white/10"
         >
-          + Add Rule
+          {t('admin.ar.add')}
         </button>
       )}
 

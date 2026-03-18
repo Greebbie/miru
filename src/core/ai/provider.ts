@@ -1,6 +1,7 @@
 export interface Message {
   role: 'user' | 'assistant' | 'system'
   content: string
+  images?: string[]  // base64 data URLs, e.g. "data:image/jpeg;base64,..."
   tool_calls?: ToolCallRequest[]
   tool_results?: ToolResult[]
 }
@@ -53,9 +54,27 @@ export function formatMessagesForClaude(messages: Message[]): unknown[] {
         tool_use_id: tr.tool_use_id,
         content: tr.content,
       }))
+      // Inject images alongside tool results (e.g. screenshot from describe_screen)
+      if (msg.images?.length) {
+        for (const img of msg.images) {
+          const m = img.match(/^data:(image\/\w+);base64,(.+)$/)
+          if (m) content.push({ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } })
+        }
+        if (msg.content) content.push({ type: 'text', text: msg.content })
+      }
       result.push({ role: 'user', content })
     } else {
-      result.push({ role: msg.role, content: msg.content })
+      if (msg.images?.length) {
+        const content: unknown[] = []
+        for (const img of msg.images) {
+          const m = img.match(/^data:(image\/\w+);base64,(.+)$/)
+          if (m) content.push({ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } })
+        }
+        if (msg.content) content.push({ type: 'text', text: msg.content })
+        result.push({ role: msg.role, content })
+      } else {
+        result.push({ role: msg.role, content: msg.content })
+      }
     }
   }
   return result
@@ -81,8 +100,26 @@ export function formatMessagesForOpenAI(messages: Message[]): unknown[] {
       for (const tr of msg.tool_results) {
         result.push({ role: 'tool', tool_call_id: tr.tool_use_id, content: tr.content })
       }
+      // Inject image as a separate user message after tool results for OpenAI format
+      if (msg.images?.length) {
+        const content: unknown[] = []
+        for (const img of msg.images) {
+          content.push({ type: 'image_url', image_url: { url: img, detail: 'low' } })
+        }
+        if (msg.content) content.push({ type: 'text', text: msg.content })
+        result.push({ role: 'user', content })
+      }
     } else {
-      result.push({ role: msg.role, content: msg.content })
+      if (msg.images?.length) {
+        const content: unknown[] = []
+        for (const img of msg.images) {
+          content.push({ type: 'image_url', image_url: { url: img, detail: 'low' } })
+        }
+        if (msg.content) content.push({ type: 'text', text: msg.content })
+        result.push({ role: msg.role, content })
+      } else {
+        result.push({ role: msg.role, content: msg.content })
+      }
     }
   }
   return result

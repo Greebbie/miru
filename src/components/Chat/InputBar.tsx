@@ -3,6 +3,7 @@ import { useChatStore } from '@/stores/chatStore'
 import { useAI } from '@/hooks/useAI'
 import { useVoiceInput } from '@/hooks/useVoiceInput'
 import { markUserActive } from '@/hooks/useMonitor'
+import { useI18n } from '@/i18n/useI18n'
 import SlashMenu from './SlashMenu'
 import type { SkillDefinition } from '@/core/skills/registry'
 
@@ -10,8 +11,17 @@ export default function InputBar() {
   const [input, setInput] = useState('')
   const [showSlash, setShowSlash] = useState(false)
   const { isStreaming } = useChatStore()
-  const { sendMessage } = useAI()
+  const { sendMessage, abort } = useAI()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const { t } = useI18n()
+
+  const pendingPrompt = useChatStore((s) => s.pendingPrompt)
+  useEffect(() => {
+    if (pendingPrompt) {
+      sendMessage(pendingPrompt)
+      useChatStore.getState().setPendingPrompt(null)
+    }
+  }, [pendingPrompt, sendMessage])
 
   const handleVoiceResult = useCallback(
     (text: string) => {
@@ -19,7 +29,7 @@ export default function InputBar() {
     },
     [sendMessage]
   )
-  const { isListening, toggle: toggleVoice } = useVoiceInput(handleVoiceResult)
+  const { isListening, isInitializing, downloadProgress, error: voiceError, toggle: toggleVoice } = useVoiceInput(handleVoiceResult)
 
   // Listen for Alt+M toggle-voice from main process
   // Use ref to always call latest toggleVoice, register listener once
@@ -28,8 +38,9 @@ export default function InputBar() {
   useEffect(() => {
     const handler = () => toggleVoiceRef.current()
     window.electronAPI?.onToggleVoice(handler)
-    // Note: ipcRenderer.on accumulates — no off API exposed for voice,
-    // but this effect runs once so it's safe
+    return () => {
+      window.electronAPI?.offToggleVoice()
+    }
   }, [])
 
   const handleSend = useCallback(() => {
@@ -94,33 +105,58 @@ export default function InputBar() {
         value={input}
         onChange={handleInput}
         onKeyDown={handleKeyDown}
-        placeholder={isStreaming ? 'Miru \u6B63\u5728\u601D\u8003...' : '\u8BF4\u70B9\u4EC0\u4E48... \u8F93\u5165 / \u67E5\u770B\u547D\u4EE4'}
+        placeholder={isStreaming ? t('chat.thinking') : t('chat.placeholder')}
         disabled={isStreaming}
         rows={1}
         className="flex-1 bg-white/10 text-white text-sm rounded-lg px-3 py-2 resize-none outline-none placeholder:text-white/30 disabled:opacity-50"
         style={{ maxHeight: 80 }}
       />
-      {/* Voice button */}
-      {typeof window !== 'undefined' && window.webkitSpeechRecognition && (
+      {/* Voice button — always available (local Whisper) */}
+      <div className="relative shrink-0">
+        {voiceError && (
+          <div className="absolute bottom-full mb-1 right-0 whitespace-nowrap text-[10px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded">
+            {voiceError}
+          </div>
+        )}
+        {isInitializing && downloadProgress && (
+          <div className="absolute bottom-full mb-1 right-0 whitespace-nowrap text-[10px] text-blue-300 bg-blue-500/10 px-2 py-0.5 rounded">
+            {downloadProgress.progress != null
+              ? `${Math.round(downloadProgress.progress)}%`
+              : downloadProgress.status}
+          </div>
+        )}
         <button
           onClick={toggleVoice}
-          className={`w-8 h-8 rounded-lg text-sm flex items-center justify-center transition-colors shrink-0 ${
-            isListening
-              ? 'bg-red-500/80 text-white animate-pulse-mic'
-              : 'bg-white/10 text-white/50 hover:bg-white/20 hover:text-white/80'
+          disabled={isInitializing}
+          className={`w-8 h-8 rounded-lg text-sm flex items-center justify-center transition-colors ${
+            isInitializing
+              ? 'bg-yellow-500/40 text-white/70 animate-pulse'
+              : isListening
+                ? 'bg-red-500/80 text-white animate-pulse-mic'
+                : 'bg-white/10 text-white/50 hover:bg-white/20 hover:text-white/80'
           }`}
-          title={isListening ? '\u505C\u6B62\u5F55\u97F3' : '\u8BED\u97F3\u8F93\u5165'}
+          title={isInitializing ? t('chat.sttLoading') : isListening ? t('chat.stopRecording') : t('chat.voiceInput')}
         >
           {'\uD83C\uDFA4'}
         </button>
+      </div>
+      {isStreaming ? (
+        <button
+          onClick={abort}
+          className="w-8 h-8 rounded-lg bg-red-500/80 text-white text-sm flex items-center justify-center hover:bg-red-500 transition-colors shrink-0"
+          title={t('chat.stop')}
+        >
+          {'\u25A0'}
+        </button>
+      ) : (
+        <button
+          onClick={handleSend}
+          disabled={!input.trim()}
+          className="w-8 h-8 rounded-lg bg-blue-500/80 text-white text-sm flex items-center justify-center hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
+        >
+          {'\u2191'}
+        </button>
       )}
-      <button
-        onClick={handleSend}
-        disabled={isStreaming || !input.trim()}
-        className="w-8 h-8 rounded-lg bg-blue-500/80 text-white text-sm flex items-center justify-center hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
-      >
-        {'\u2191'}
-      </button>
     </div>
   )
 }

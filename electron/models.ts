@@ -2,7 +2,9 @@ import fs from 'fs'
 import path from 'path'
 import https from 'https'
 
-const YOLO_URL = 'https://huggingface.co/Ultralytics/YOLOv8/resolve/main/yolov8n.onnx'
+// Original Ultralytics/YOLOv8 repo only has .pt files, not ONNX.
+// Use s1777/yolo-v8n-onnx which has the pre-exported ONNX model.
+const YOLO_URL = (process.env.HF_MIRROR || 'https://hf-mirror.com') + '/s1777/yolo-v8n-onnx/resolve/main/yolov8n.onnx'
 
 /**
  * Ensure ONNX model exists locally. Download from Hugging Face if missing.

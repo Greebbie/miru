@@ -225,6 +225,166 @@ export function registerBuiltinSkills() {
     },
   })
 
+  // ---- Showcase Skills ----
+
+  // Quick Note
+  skillRegistry.register({
+    id: 'quick_note',
+    name: '\u5FEB\u901F\u7B14\u8BB0',
+    nameEn: 'Quick Note',
+    icon: '\uD83D\uDCDD',
+    category: 'create',
+    description: 'Quick capture to local markdown',
+    keywords: ['\u7B14\u8BB0', '\u8BB0\u5F55', 'note', 'memo', '\u8BB0\u4E00\u4E0B'],
+    execute: async (input: string) => {
+      const content = input.replace(/^(?:\/note|记一下|笔记)\s*/i, '').trim()
+      if (!content) {
+        useChatStore.getState().addMessage({ role: 'assistant', content: '\u8981\u8BB0\u4EC0\u4E48\u5462\uFF1F\u8BF7\u544A\u8BC9\u6211\u5185\u5BB9~' })
+        return
+      }
+      const home = await window.electronAPI.getHomeDir()
+      const now = new Date()
+      const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+      const notePath = `${home}/.miru/notes/${dateStr}.md`
+
+      // Read existing content or start fresh
+      let existing = ''
+      try {
+        existing = await window.electronAPI.readFile(notePath)
+      } catch { /* file doesn't exist yet */ }
+
+      const entry = `\n- ${timeStr} ${content}`
+      const newContent = existing
+        ? existing + entry
+        : `# ${dateStr}\n${entry}`
+
+      await toolRegistry.execute('write_file', { path: notePath, content: newContent })
+      useChatStore.getState().addMessage({
+        role: 'assistant',
+        content: `\uD83D\uDCDD \u5DF2\u8BB0\u5F55\uFF01\u4FDD\u5B58\u5230 ${dateStr}.md`,
+      })
+    },
+  })
+
+  // Quick Note Search
+  skillRegistry.register({
+    id: 'quick_note_search',
+    name: '\u67E5\u770B\u7B14\u8BB0',
+    nameEn: 'View Notes',
+    icon: '\uD83D\uDCDD',
+    category: 'create',
+    description: 'Search and view saved notes',
+    keywords: ['\u67E5\u7B14\u8BB0', '\u770B\u7B14\u8BB0', 'notes', 'view notes'],
+    execute: async () => {
+      const home = await window.electronAPI.getHomeDir()
+      const notesDir = `${home}/.miru/notes`
+      try {
+        const files = await window.electronAPI.listFiles(notesDir)
+        const mdFiles = files.filter((f: { name: string; isDir: boolean }) => !f.isDir && f.name.endsWith('.md'))
+        if (mdFiles.length === 0) {
+          useChatStore.getState().addMessage({ role: 'assistant', content: '\u8FD8\u6CA1\u6709\u7B14\u8BB0\u5462\uFF0C\u7528 /note \u8BB0\u5F55\u4E00\u4E0B\u5427~' })
+          return
+        }
+        // Show latest note
+        const latest = mdFiles.sort((a: { name: string }, b: { name: string }) => b.name.localeCompare(a.name))[0]
+        const content = await window.electronAPI.readFile(`${notesDir}/${latest.name}`)
+        const preview = content.length > 500 ? content.slice(0, 500) + '...' : content
+        useChatStore.getState().addMessage({
+          role: 'assistant',
+          content: `\uD83D\uDCDD **${latest.name}** (共 ${mdFiles.length} 个笔记文件)\n\n${preview}`,
+        })
+      } catch {
+        useChatStore.getState().addMessage({ role: 'assistant', content: '\u8FD8\u6CA1\u6709\u7B14\u8BB0\u5462\uFF0C\u7528 /note \u8BB0\u5F55\u4E00\u4E0B\u5427~' })
+      }
+    },
+  })
+
+  // Clipboard History
+  const clipboardHistory: { text: string; time: number }[] = []
+  let clipboardTimer: ReturnType<typeof setInterval> | null = null
+
+  skillRegistry.register({
+    id: 'clipboard_history',
+    name: '\u526A\u8D34\u677F\u5386\u53F2',
+    nameEn: 'Clipboard History',
+    icon: '\uD83D\uDCCB',
+    category: 'system',
+    description: 'Track and view clipboard history',
+    keywords: ['\u526A\u8D34\u677F', '\u5386\u53F2', 'clipboard', 'history', '\u590D\u5236\u5386\u53F2'],
+    execute: async () => {
+      // Start tracking if not already
+      if (!clipboardTimer) {
+        let lastText = ''
+        clipboardTimer = setInterval(async () => {
+          try {
+            const text = await window.electronAPI.clipboardRead()
+            if (text && text !== lastText) {
+              lastText = text
+              clipboardHistory.unshift({ text: text.slice(0, 200), time: Date.now() })
+              if (clipboardHistory.length > 30) clipboardHistory.pop()
+            }
+          } catch { /* ignore */ }
+        }, 5000)
+      }
+
+      if (clipboardHistory.length === 0) {
+        useChatStore.getState().addMessage({
+          role: 'assistant',
+          content: '\uD83D\uDCCB \u526A\u8D34\u677F\u5386\u53F2\u5DF2\u5F00\u59CB\u8BB0\u5F55\uFF01\u590D\u5236\u4E00\u4E9B\u5185\u5BB9\u540E\u518D\u67E5\u770B~',
+        })
+        return
+      }
+
+      const lines = clipboardHistory.slice(0, 10).map((item, i) => {
+        const time = new Date(item.time).toLocaleTimeString()
+        const preview = item.text.length > 60 ? item.text.slice(0, 60) + '...' : item.text
+        return `${i + 1}. \`${time}\` ${preview}`
+      })
+
+      useChatStore.getState().addMessage({
+        role: 'assistant',
+        content: `\uD83D\uDCCB **\u526A\u8D34\u677F\u5386\u53F2** (\u6700\u8FD1 ${clipboardHistory.length} \u6761)\n\n${lines.join('\n')}`,
+      })
+    },
+  })
+
+  // Screen Reader
+  skillRegistry.register({
+    id: 'screen_reader',
+    name: '\u5C4F\u5E55\u9605\u8BFB',
+    nameEn: 'Screen Reader',
+    icon: '\uD83D\uDC41\uFE0F',
+    category: 'system',
+    description: 'Read screen content via OCR',
+    keywords: ['\u770B\u5C4F\u5E55', '\u8BFB\u5C4F\u5E55', 'screen', 'read', 'ocr', '\u5C4F\u5E55\u9605\u8BFB'],
+    aiInvocable: true,
+    execute: async () => {
+      useChatStore.getState().addMessage({
+        role: 'assistant',
+        content: '\uD83D\uDC41\uFE0F \u6B63\u5728\u770B\u5C4F\u5E55...',
+      })
+
+      try {
+        const visionResult = await window.electronAPI.visionAnalyze()
+        const text = visionResult.ocrText || visionResult.summary || '\u6CA1\u6709\u8BC6\u522B\u5230\u6587\u5B57'
+        const detections = visionResult.detections?.length
+          ? `\n\n\u68C0\u6D4B\u5230: ${visionResult.detections.map(d => d.label).join(', ')}`
+          : ''
+
+        useChatStore.getState().addMessage({
+          role: 'assistant',
+          content: `\uD83D\uDC41\uFE0F **\u5C4F\u5E55\u5185\u5BB9:**\n\n${text}${detections}`,
+        })
+      } catch {
+        useChatStore.getState().addMessage({
+          role: 'assistant',
+          content: '\u5594...\u6CA1\u80FD\u8BFB\u53D6\u5C4F\u5E55\uFF0C\u53EF\u80FD\u89C6\u89C9\u6A21\u5757\u8FD8\u6CA1\u521D\u59CB\u5316',
+        })
+      }
+    },
+  })
+
   // Non-tool skills
   skillRegistry.register({
     id: 'clear_chat',
@@ -255,5 +415,12 @@ export function registerBuiltinSkills() {
         content: `Miru \u53EF\u4EE5\u5E2E\u4F60\u505A\u8FD9\u4E9B\u4E8B\uFF1A\n\n${lines.join('\n')}`,
       })
     },
+  })
+
+  // Initialize marketplace skills (load from ~/.miru/skills/)
+  import('./loader').then(({ initMarketplaceSkills }) => {
+    initMarketplaceSkills().catch(err => {
+      console.warn('[Miru] Marketplace skills init:', err)
+    })
   })
 }

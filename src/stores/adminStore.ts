@@ -15,12 +15,13 @@ interface MonitorRule {
   name: string
   enabled: boolean
   trigger: {
-    type: 'app_focus' | 'window_title'
+    type: 'app_focus' | 'window_title' | 'content_change'
     pattern: string
     app?: string
+    visionIntervalMs?: number
   }
   action: {
-    type: 'notify' | 'auto_reply' | 'run_tool' | 'run_skill'
+    type: 'notify' | 'auto_reply' | 'run_tool' | 'run_skill' | 'send_keys_to_app'
     payload: string
     params?: Record<string, unknown>
   }

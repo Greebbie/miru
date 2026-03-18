@@ -2,49 +2,30 @@ import { useCallback, useRef } from 'react'
 import { useChatStore } from '@/stores/chatStore'
 import { useConfigStore } from '@/stores/configStore'
 import { useCharacterStore } from '@/stores/characterStore'
-import type { AIProvider, Message as AIMessage, ToolCallRequest, ToolResult } from '@/core/ai/provider'
-import { ClaudeProvider } from '@/core/ai/claude'
-import { OpenAIProvider } from '@/core/ai/openai'
-import { DeepSeekProvider } from '@/core/ai/deepseek'
-import { OllamaProvider } from '@/core/ai/ollama'
-import { VLLMProvider } from '@/core/ai/vllm'
-import { QwenProvider } from '@/core/ai/qwen'
-import { MinimaxProvider } from '@/core/ai/minimax'
+import type { Message as AIMessage, ToolCallRequest, ToolResult } from '@/core/ai/provider'
+import { createProvider } from '@/core/ai/createProvider'
 import { parseLocal } from '@/core/parser/local'
 import { toolRegistry } from '@/core/tools'
 import { injectMemory } from '@/core/memory/injector'
 import { extractFromConversation } from '@/core/memory/extractor'
-import { pruneMessages } from '@/core/ai/tokenBudget'
-import { estimateTokens } from '@/core/ai/tokenBudget'
+import { pruneMessages, estimateTokens, estimateMessageTokens } from '@/core/ai/tokenBudget'
 import { buildSystemPrompt } from '@/core/ai/systemPrompt'
 import { skillRegistry } from '@/core/skills/registry'
 import { executeSkill } from '@/core/skills/executor'
 import { useCostStore } from '@/stores/costStore'
 import { speakText } from '@/core/tts'
+import { humanizeError } from '@/core/errors/humanize'
+import { describeToolAction } from '@/core/tools/describe'
+import { playSound } from '@/core/sound'
+import { messages } from '@/i18n/messages'
 
 const MAX_TOOL_ROUNDS = 5
 
-function createProvider(): AIProvider | null {
-  const { provider, apiKey, model, baseUrl, groupId } = useConfigStore.getState()
-
-  switch (provider) {
-    case 'claude':
-      return apiKey ? new ClaudeProvider(apiKey, model) : null
-    case 'openai':
-      return apiKey ? new OpenAIProvider(apiKey, model) : null
-    case 'deepseek':
-      return apiKey ? new DeepSeekProvider(apiKey, model) : null
-    case 'ollama':
-      return new OllamaProvider(baseUrl || undefined, model || undefined)
-    case 'vllm':
-      return new VLLMProvider(baseUrl || undefined, model || undefined)
-    case 'qwen':
-      return apiKey ? new QwenProvider(apiKey, model || undefined) : null
-    case 'minimax':
-      return apiKey ? new MinimaxProvider(apiKey, groupId || '', model || undefined) : null
-    default:
-      return null
-  }
+/** Get a translated string using current language setting */
+function msg(key: string): string {
+  const lang = useConfigStore.getState().language
+  const eff = lang === 'en' ? 'en' : lang === 'zh' ? 'zh' : (navigator.language.startsWith('zh') ? 'zh' : 'en')
+  return messages[eff]?.[key] || messages.zh[key] || key
 }
 
 /**
@@ -60,32 +41,39 @@ async function getScreenContext(): Promise<string> {
     if (result) {
       return `${result.app} - ${result.title || '(no title)'}`
     }
-  } catch { /* ignore timeout/errors */ }
+  } catch (err) { console.warn('[Miru] getScreenContext:', err) }
   return ''
 }
 
 /**
- * Get vision context if enabled. Returns empty string if disabled or fails.
+ * Get vision context if enabled. Now handled by describe_screen tool on demand.
+ * Auto-context only provides window title (Layer 0, zero tokens).
  */
 async function getVisionContext(): Promise<string> {
-  const { visionEnabled } = useConfigStore.getState()
-  if (!visionEnabled || !window.electronAPI) return ''
-
+  const config = useConfigStore.getState()
+  if (!config.visionEnabled) return ''
+  if (!window.electronAPI) return ''
   try {
     const status = await window.electronAPI.visionStatus()
-    if (!status.initialized) {
-      await window.electronAPI.visionInit()
-    }
+    if (!status.initialized) return '' // Don't auto-init, avoid surprise downloads
     const result = await window.electronAPI.visionAnalyze()
-    return result.summary || ''
-  } catch { /* ignore vision errors */ }
-  return ''
+    const ocrText = result.ocrText || ''
+    if (!ocrText.trim()) return '[Vision active] Miru can see the screen. Use describe_screen for details.'
+    return `[Vision active] ${ocrText.slice(0, 200)}`
+  } catch {
+    return ''
+  }
 }
 
 export function useAI() {
   const abortRef = useRef<AbortController | null>(null)
+  const isProcessingRef = useRef(false)
 
   const sendMessage = useCallback(async (text: string) => {
+    if (isProcessingRef.current) return
+    isProcessingRef.current = true
+
+    try {
     const chatStore = useChatStore.getState()
     const charStore = useCharacterStore.getState()
 
@@ -97,6 +85,16 @@ export function useAI() {
     // Step 1: Try local parser first (zero tokens!)
     const localMatch = parseLocal(text)
     if (localMatch) {
+      // Handle direct response (e.g. current time) — zero token, no tool needed
+      if (localMatch.directResponse) {
+        chatStore.addMessage({
+          role: 'assistant',
+          content: localMatch.directResponse,
+        })
+        charStore.setEmotions({ joy: 0.5 })
+        return
+      }
+
       // Handle skill match
       if (localMatch.skill) {
         const skill = skillRegistry.get(localMatch.skill)
@@ -104,14 +102,14 @@ export function useAI() {
           try {
             await skill.execute(text)
             charStore.setEmotions({ joy: 0.6 })
-          } catch {
+          } catch (err) {
+            console.warn('[Miru] Skill execute error:', err)
             chatStore.addMessage({
               role: 'assistant',
-              content: '哎呀，执行的时候出了点问题...',
+              content: humanizeError(err, useConfigStore.getState().language),
             })
             charStore.setEmotions({ concern: 0.7 })
           }
-          chatStore.setStreaming(false)
           return
         } else if (skill?.steps) {
           try {
@@ -125,14 +123,14 @@ export function useAI() {
                 : `呜...失败了: ${result.summary}`,
             })
             charStore.setEmotions(result.success ? { joy: 0.6 } : { concern: 0.5 })
-          } catch {
+          } catch (err) {
+            console.warn('[Miru] Skill steps error:', err)
             chatStore.addMessage({
               role: 'assistant',
-              content: '哎呀，执行的时候出了点问题...',
+              content: humanizeError(err, useConfigStore.getState().language),
             })
             charStore.setEmotions({ concern: 0.7 })
           }
-          chatStore.setStreaming(false)
           return
         }
       }
@@ -142,9 +140,12 @@ export function useAI() {
         const tool = toolRegistry.get(localMatch.tool)
         if (tool) {
           if (tool.riskLevel === 'high') {
+            const lang = useConfigStore.getState().language
             chatStore.setPendingConfirm({
               toolName: localMatch.tool,
               params: localMatch.params,
+              riskLevel: tool.riskLevel,
+              description: describeToolAction(localMatch.tool, localMatch.params, lang),
               onConfirm: async () => {
                 chatStore.setPendingConfirm(null)
                 try {
@@ -156,10 +157,11 @@ export function useAI() {
                       : `呜...失败了: ${result.summary}`,
                   })
                   charStore.setEmotions(result.success ? { joy: 0.6 } : { concern: 0.5 })
-                } catch {
+                } catch (err) {
+                  console.warn('[Miru] Tool confirm exec error:', err)
                   chatStore.addMessage({
                     role: 'assistant',
-                    content: '哎呀，执行的时候出了点问题...',
+                    content: humanizeError(err, useConfigStore.getState().language),
                   })
                   charStore.setEmotions({ concern: 0.7 })
                 }
@@ -168,16 +170,81 @@ export function useAI() {
                 chatStore.setPendingConfirm(null)
                 chatStore.addMessage({
                   role: 'assistant',
-                  content: '好的，已取消~',
+                  content: msg('ai.cancelled'),
                 })
               },
             })
-            chatStore.setStreaming(false)
             return
           }
 
           try {
             const result = await toolRegistry.execute(localMatch.tool, localMatch.params)
+
+            // Check if tool returned an image (e.g. describe_screen)
+            const imageUrl = (result.data as Record<string, unknown>)?._image as string | undefined
+            if (imageUrl && result.success) {
+              // Screenshot captured locally (zero tokens). Now send to AI for description.
+              const provider = createProvider()
+              if (!provider) {
+                chatStore.addMessage({ role: 'assistant', content: msg('ai.noApiKey') })
+                charStore.setEmotions({ concern: 0.4 })
+                return
+              }
+
+              const lang = useConfigStore.getState().language
+              const prompt = lang === 'en'
+                ? 'Describe what you see on this screen briefly.'
+                : '简要描述一下你在屏幕上看到的内容。'
+
+              const imageMessages: AIMessage[] = [
+                { role: 'user', content: prompt, images: [imageUrl] },
+              ]
+
+              const visionAssistantId = chatStore.addMessage({ role: 'assistant', content: '' })
+              const controller = new AbortController()
+              abortRef.current?.abort()
+              abortRef.current = controller
+
+              try {
+                let responseText = ''
+                for await (const chunk of provider.streamChat(imageMessages, undefined, controller.signal)) {
+                  if (chunk.type === 'text') {
+                    responseText += chunk.text
+                    useChatStore.getState().appendToLastMessage(chunk.text)
+                  } else if (chunk.type === 'error') {
+                    useChatStore.getState().updateMessage(visionAssistantId, {
+                      content: humanizeError(chunk.error, useConfigStore.getState().language),
+                    })
+                    charStore.setEmotions({ concern: 0.7 })
+                    return
+                  }
+                }
+                charStore.setEmotions({ joy: 0.6 })
+                playSound('reply')
+
+                // Cost tracking
+                const { provider: provName, model } = useConfigStore.getState()
+                const inputTokens = estimateTokens(prompt) + 200 // image tokens estimate
+                const outputTokens = estimateTokens(responseText)
+                useCostStore.getState().addUsage(inputTokens, outputTokens, provName, model)
+
+                if (useConfigStore.getState().ttsEnabled && responseText.length > 0 && responseText.length < 500) {
+                  speakText(responseText)
+                }
+              } catch (err) {
+                if (err instanceof DOMException && err.name === 'AbortError') {
+                  useChatStore.getState().appendToLastMessage('\n(已中断)')
+                } else {
+                  useChatStore.getState().updateMessage(visionAssistantId, {
+                    content: humanizeError(err, useConfigStore.getState().language),
+                  })
+                }
+              } finally {
+                if (abortRef.current === controller) abortRef.current = null
+              }
+              return
+            }
+
             chatStore.addMessage({
               role: 'assistant',
               content: result.success
@@ -185,14 +252,14 @@ export function useAI() {
                 : `呜...失败了: ${result.summary}`,
             })
             charStore.setEmotions(result.success ? { joy: 0.6 } : { concern: 0.5 })
-          } catch {
+          } catch (err) {
+            console.warn('[Miru] Tool exec error:', err)
             chatStore.addMessage({
               role: 'assistant',
-              content: '哎呀，执行的时候出了点问题...',
+              content: humanizeError(err, useConfigStore.getState().language),
             })
             charStore.setEmotions({ concern: 0.7 })
           }
-          chatStore.setStreaming(false)
           return
         }
       }
@@ -203,22 +270,27 @@ export function useAI() {
     if (!provider) {
       chatStore.addMessage({
         role: 'assistant',
-        content: 'Miru 还没有配置 API Key 呢~ 去设置里填一下吧！',
+        content: msg('ai.noApiKey'),
       })
-      chatStore.setStreaming(false)
       charStore.setEmotions({ concern: 0.5 })
       return
     }
+
+    // Token budget config
+    const tokenBudget = useConfigStore.getState().tokenBudget
+    const pruneLimit = tokenBudget === 'minimal' ? 3000 : tokenBudget === 'smart' ? 6000 : 4000
+    const isSimpleMessage = text.length < 100 && !/打开|文件|搜索|搜|查|删除|创建|执行|天气|新闻|翻译|open|file|search|delete|create|run|list|move|weather|translate|news/i.test(text)
 
     // Get screen context — use vision if enabled, otherwise active window title
     const visionContext = await getVisionContext()
     const screenContext = visionContext || await getScreenContext()
 
     // Build message history with memory injection (async for FTS5 fact search)
-    const memoryContext = await injectMemory(screenContext, text)
+    const maxEpisodes = tokenBudget === 'smart' ? 10 : undefined
+    const memoryContext = await injectMemory(screenContext, text, maxEpisodes)
 
-    // Build tool defs including AI-invocable skills
-    const toolDefs = toolRegistry.getToolDefs()
+    // Build tool defs including AI-invocable skills (minimal mode skips for simple messages)
+    const toolDefs = tokenBudget === 'minimal' && isSimpleMessage ? [] : toolRegistry.getToolDefs()
     const skillDefs = skillRegistry.getAll()
       .filter((s) => s.aiInvocable && (s.steps || s.execute))
       .map((s) => ({
@@ -260,8 +332,8 @@ export function useAI() {
         if (controller.signal.aborted) break
 
         // Prune to fit token budget
-        const systemTokens = estimateTokens(buildSystemPrompt()) + 200
-        const prunedMessages = pruneMessages(conversationMessages, 4000 - systemTokens)
+        const systemTokens = estimateTokens(buildSystemPrompt()) + estimateTokens(JSON.stringify(allDefs))
+        const prunedMessages = pruneMessages(conversationMessages, pruneLimit - systemTokens)
 
         // Collect this round's text and tool calls
         let roundText = ''
@@ -287,9 +359,10 @@ export function useAI() {
 
             case 'error':
               useChatStore.getState().updateMessage(assistantId, {
-                content: `哎呀，Miru 遇到了一点小问题... (${chunk.error.slice(0, 100)})`,
+                content: humanizeError(chunk.error, useConfigStore.getState().language),
               })
               charStore.setEmotions({ concern: 0.7 })
+              playSound('alert')
               return
 
             case 'done':
@@ -300,11 +373,12 @@ export function useAI() {
         // No tool calls → AI finished with text response
         if (roundToolCalls.length === 0) {
           charStore.setEmotions({ joy: 0.6 })
+          playSound('reply')
           extractFromConversation(useChatStore.getState().messages)
 
           // Cost tracking
           const { provider, model } = useConfigStore.getState()
-          const inputTokens = prunedMessages.reduce((sum, m) => sum + estimateTokens(m.content), 0)
+          const inputTokens = prunedMessages.reduce((sum, m) => sum + estimateMessageTokens(m), 0)
           const outputTokens = estimateTokens(roundText)
           useCostStore.getState().addUsage(inputTokens, outputTokens, provider, model)
 
@@ -319,6 +393,7 @@ export function useAI() {
         // Loop detection: same tool+params called twice in a row, or alternating pattern
         const toolKey = roundToolCalls.map((tc) => `${tc.name}:${JSON.stringify(tc.input)}`).join('|')
         recentToolKeys.push(toolKey)
+        if (recentToolKeys.length > 10) recentToolKeys.shift()
         if (toolKey === lastToolKey) {
           sameToolCount++
           if (sameToolCount >= 2) break
@@ -342,7 +417,11 @@ export function useAI() {
 
         // Execute each tool call and collect results
         const toolResults: ToolResult[] = []
+        let pendingImage: string | undefined
         for (const tc of roundToolCalls) {
+          // Check if user aborted before executing next tool
+          if (controller.signal.aborted) break
+
           // Update badge to running
           useChatStore.getState().updateToolCall(assistantId, tc.id, { status: 'running' })
 
@@ -382,10 +461,13 @@ export function useAI() {
 
             // High-risk tool: ask for confirmation
             if (tool.riskLevel === 'high') {
-              const confirmed = await new Promise<boolean>((resolve) => {
+              const lang = useConfigStore.getState().language
+              const confirmPromise = new Promise<boolean>((resolve) => {
                 useChatStore.getState().setPendingConfirm({
                   toolName: tc.name,
                   params: tc.input,
+                  riskLevel: tool.riskLevel,
+                  description: describeToolAction(tc.name, tc.input, lang),
                   onConfirm: () => {
                     useChatStore.getState().setPendingConfirm(null)
                     resolve(true)
@@ -396,6 +478,11 @@ export function useAI() {
                   },
                 })
               })
+              const timeout = new Promise<boolean>((resolve) => setTimeout(() => {
+                useChatStore.getState().setPendingConfirm(null)
+                resolve(false)
+              }, 30000))
+              const confirmed = await Promise.race([confirmPromise, timeout])
 
               if (!confirmed) {
                 toolResults.push({ tool_use_id: tc.id, content: 'User cancelled this action.' })
@@ -408,18 +495,27 @@ export function useAI() {
             }
 
             const result = await toolRegistry.execute(tc.name, tc.input)
-            // Give AI the FULL result content, not just summary
-            const fullContent = typeof result.data === 'string'
-              ? result.data.slice(0, 4000)
-              : JSON.stringify(result.data).slice(0, 4000)
-            toolResults.push({
-              tool_use_id: tc.id,
-              content: result.success ? fullContent : `Error: ${result.summary}`,
-            })
+            const imageUrl = (result.data as Record<string, unknown>)?._image as string | undefined
+
+            if (imageUrl) {
+              // Image result: mark for injection into conversation
+              toolResults.push({ tool_use_id: tc.id, content: result.summary || '[screenshot]' })
+              pendingImage = imageUrl
+            } else {
+              // Give AI the FULL result content, not just summary
+              const fullContent = typeof result.data === 'string'
+                ? result.data.slice(0, 4000)
+                : JSON.stringify(result.data).slice(0, 4000)
+              toolResults.push({
+                tool_use_id: tc.id,
+                content: result.success ? fullContent : `Error: ${result.summary}`,
+              })
+            }
             useChatStore.getState().updateToolCall(assistantId, tc.id, {
               status: result.success ? 'done' : 'error',
               result,
             })
+            if (result.success) playSound('complete')
           } catch (err) {
             const errMsg = err instanceof Error ? err.message : 'Unknown error'
             toolResults.push({ tool_use_id: tc.id, content: `Error: ${errMsg}` })
@@ -433,9 +529,11 @@ export function useAI() {
         // Append tool results to conversation
         conversationMessages.push({
           role: 'user',
-          content: '',
+          content: pendingImage ? '请描述这张截图上的内容' : '',
+          images: pendingImage ? [pendingImage] : undefined,
           tool_results: toolResults,
         })
+        pendingImage = undefined
 
         // Create new assistant placeholder for next round
         assistantId = useChatStore.getState().addMessage({ role: 'assistant', content: '' })
@@ -445,17 +543,25 @@ export function useAI() {
       if (err instanceof DOMException && err.name === 'AbortError') {
         useChatStore.getState().appendToLastMessage('\n(已中断)')
       } else {
-        const errorMsg = err instanceof Error ? err.message : 'Unknown error'
         useChatStore.getState().updateMessage(assistantId, {
-          content: `呜...连接出了问题，Miru 等一下再试试？ (${errorMsg.slice(0, 80)})`,
+          content: humanizeError(err, useConfigStore.getState().language),
         })
         charStore.setEmotions({ concern: 0.7 })
       }
     } finally {
-      useChatStore.getState().setStreaming(false)
       if (abortRef.current === controller) {
         abortRef.current = null
       }
+    }
+
+    // Clean orphan empty assistant message (placeholder left from error between creation and streaming)
+    const lastMsg = useChatStore.getState().messages.find((m) => m.id === assistantId)
+    if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.content && (!lastMsg.toolCalls || lastMsg.toolCalls.length === 0)) {
+      useChatStore.getState().deleteMessage(assistantId)
+    }
+    } finally {
+      useChatStore.getState().setStreaming(false)
+      isProcessingRef.current = false
     }
   }, [])
 

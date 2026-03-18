@@ -1,16 +1,32 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { memoryStore } from '@/core/memory/store'
+import { useI18n } from '@/i18n/useI18n'
 
 export default function MemoryViewer() {
   const [, forceUpdate] = useState(0)
+  const [confirmClear, setConfirmClear] = useState(false)
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { t } = useI18n()
   const refresh = () => forceUpdate((n) => n + 1)
+
+  const handleClearClick = useCallback(() => {
+    if (confirmClear) {
+      memoryStore.clearEpisodes()
+      setConfirmClear(false)
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current)
+      refresh()
+    } else {
+      setConfirmClear(true)
+      confirmTimerRef.current = setTimeout(() => setConfirmClear(false), 3000)
+    }
+  }, [confirmClear])
 
   const memory = memoryStore.getAll()
 
   return (
     <div className="space-y-3">
       {/* Identity */}
-      <Section title="身份信息">
+      <Section title={t('memory.identity')}>
         {Object.entries(memory.identity).length === 0 ? (
           <Empty />
         ) : (
@@ -26,7 +42,7 @@ export default function MemoryViewer() {
       </Section>
 
       {/* Preferences */}
-      <Section title="偏好设置">
+      <Section title={t('memory.preferences')}>
         {Object.entries(memory.preferences).length === 0 ? (
           <Empty />
         ) : (
@@ -42,7 +58,7 @@ export default function MemoryViewer() {
       </Section>
 
       {/* Episodes */}
-      <Section title={`最近记忆 (${memory.episodes.length})`}>
+      <Section title={`${t('memory.episodes')} (${memory.episodes.length})`}>
         {memory.episodes.length === 0 ? (
           <Empty />
         ) : (
@@ -56,10 +72,14 @@ export default function MemoryViewer() {
               </div>
             ))}
             <button
-              onClick={() => { memoryStore.clearEpisodes(); refresh() }}
-              className="text-red-400/60 text-xs mt-1 hover:text-red-400"
+              onClick={handleClearClick}
+              className={`text-xs mt-1 transition-colors ${
+                confirmClear
+                  ? 'bg-red-500/20 text-red-400 px-2 py-0.5 rounded'
+                  : 'text-red-400/60 hover:text-red-400'
+              }`}
             >
-              清除所有记忆
+              {confirmClear ? t('memory.clearConfirm') : t('memory.clearAll')}
             </button>
           </>
         )}
@@ -85,7 +105,7 @@ function MemoryItem({ label, value, onDelete }: { label: string; value: string; 
       </span>
       <button
         onClick={onDelete}
-        className="text-red-400/0 group-hover:text-red-400/60 text-xs transition-colors"
+        className="text-red-400/30 group-hover:text-red-400/60 text-xs transition-colors"
       >
         ×
       </button>
@@ -94,5 +114,6 @@ function MemoryItem({ label, value, onDelete }: { label: string; value: string; 
 }
 
 function Empty() {
-  return <p className="text-white/20 text-xs">暂无数据</p>
+  const { t } = useI18n()
+  return <p className="text-white/20 text-xs">{t('memory.noData')}</p>
 }

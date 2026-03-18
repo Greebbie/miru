@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useConfigStore, type AIProviderType } from '@/stores/configStore'
+import { useChatStore } from '@/stores/chatStore'
+import { humanizeError } from '@/core/errors/humanize'
+import { testConnection } from '@/core/ai/testConnection'
+import { useI18n } from '@/i18n/useI18n'
 
 const STEPS = ['intro', 'provider', 'apikey', 'features', 'done'] as const
 type Step = typeof STEPS[number]
@@ -19,9 +23,9 @@ const PROVIDERS: ProviderInfo[] = [
   { id: 'claude', name: 'Claude (Anthropic)', placeholder: 'sk-ant-...', needsKey: true, needsBaseUrl: false, needsGroupId: false },
   { id: 'openai', name: 'OpenAI', placeholder: 'sk-...', needsKey: true, needsBaseUrl: false, needsGroupId: false },
   { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...', needsKey: true, needsBaseUrl: false, needsGroupId: false },
-  { id: 'ollama', name: 'Ollama (本地)', placeholder: '', needsKey: false, needsBaseUrl: true, needsGroupId: false, defaultBaseUrl: 'http://localhost:11434/v1' },
-  { id: 'vllm', name: 'vLLM (本地)', placeholder: '', needsKey: false, needsBaseUrl: true, needsGroupId: false, defaultBaseUrl: 'http://localhost:8000/v1' },
-  { id: 'qwen', name: 'Qwen (通义千问)', placeholder: 'sk-...', needsKey: true, needsBaseUrl: false, needsGroupId: false },
+  { id: 'ollama', name: 'Ollama', placeholder: '', needsKey: false, needsBaseUrl: true, needsGroupId: false, defaultBaseUrl: 'http://localhost:11434/v1' },
+  { id: 'vllm', name: 'vLLM', placeholder: '', needsKey: false, needsBaseUrl: true, needsGroupId: false, defaultBaseUrl: 'http://localhost:8000/v1' },
+  { id: 'qwen', name: 'Qwen', placeholder: 'sk-...', needsKey: true, needsBaseUrl: false, needsGroupId: false },
   { id: 'minimax', name: 'Minimax', placeholder: 'API Key', needsKey: true, needsBaseUrl: false, needsGroupId: true },
 ]
 
@@ -32,8 +36,10 @@ export default function Welcome() {
   const [baseUrl, setBaseUrl] = useState('')
   const [groupId, setGroupId] = useState('')
   const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<string | null>(null)
-  const { setProvider, setApiKey: saveKey, setBaseUrl: saveBaseUrl, setGroupId: saveGroupId, setOnboarded } = useConfigStore()
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
+  const { setProvider, setApiKey: saveKey, setBaseUrl: saveBaseUrl, setGroupId: saveGroupId, setOnboarded, setLanguage } = useConfigStore()
+  const { setPendingPrompt, openChat } = useChatStore()
+  const { t, lang } = useI18n()
 
   const providerInfo = PROVIDERS.find((p) => p.id === selectedProvider)!
 
@@ -41,65 +47,86 @@ export default function Welcome() {
     setTesting(true)
     setTestResult(null)
 
-    try {
-      // Validate required fields
-      if (providerInfo.needsKey && !apiKey.trim()) {
-        setTestResult('请填入 API Key')
-        setTesting(false)
-        return
-      }
-      if (providerInfo.needsGroupId && !groupId.trim()) {
-        setTestResult('请填入 Group ID')
-        setTesting(false)
-        return
-      }
-
-      // Save and proceed
-      setProvider(selectedProvider)
-      if (providerInfo.needsKey) saveKey(apiKey)
-      if (providerInfo.needsBaseUrl) saveBaseUrl(baseUrl || providerInfo.defaultBaseUrl || '')
-      if (providerInfo.needsGroupId) saveGroupId(groupId)
-      setStep('features')
-    } catch {
-      setTestResult('Miru 连不上...检查一下配置对不对？')
-    } finally {
+    // Validate required fields
+    if (providerInfo.needsKey && !apiKey.trim()) {
+      setTestResult({ ok: false, msg: t('welcome.apiKeyRequired') })
       setTesting(false)
+      return
     }
+    if (providerInfo.needsGroupId && !groupId.trim()) {
+      setTestResult({ ok: false, msg: t('welcome.groupIdRequired') })
+      setTesting(false)
+      return
+    }
+
+    // Test connection
+    const error = await testConnection(
+      selectedProvider,
+      apiKey,
+      baseUrl || providerInfo.defaultBaseUrl || '',
+      groupId
+    )
+
+    if (error) {
+      setTestResult({ ok: false, msg: humanizeError(error, lang) })
+      setTesting(false)
+      return
+    }
+
+    // Connection successful — save and proceed
+    setTestResult({ ok: true, msg: t('welcome.connected') })
+    setProvider(selectedProvider)
+    if (providerInfo.needsKey) saveKey(apiKey)
+    if (providerInfo.needsBaseUrl) saveBaseUrl(baseUrl || providerInfo.defaultBaseUrl || '')
+    if (providerInfo.needsGroupId) saveGroupId(groupId)
+
+    setTimeout(() => setStep('features'), 600)
+    setTesting(false)
   }
 
   const handleComplete = () => {
     setOnboarded(true)
   }
 
+  const toggleLanguage = () => {
+    setLanguage(lang === 'zh' ? 'en' : 'zh')
+  }
+
   return (
     <div className="w-full h-full flex items-center justify-center">
       <motion.div
-        className="w-[340px] rounded-2xl p-6"
+        className="w-[340px] rounded-2xl p-6 relative"
         style={{
-          background: 'rgba(30, 30, 40, 0.9)',
-          backdropFilter: 'blur(12px)',
+          background: 'rgba(30, 30, 40, 0.98)',
           border: '1px solid rgba(255, 255, 255, 0.1)',
         }}
       >
         <AnimatePresence mode="wait">
           {step === 'intro' && (
             <StepContainer key="intro">
-              <div className="text-4xl text-center mb-4">🌟</div>
+              {/* Language toggle */}
+              <button
+                onClick={toggleLanguage}
+                className="absolute top-4 right-4 px-2 py-1 rounded-lg text-xs bg-white/10 text-white/60 hover:bg-white/20 hover:text-white/90 transition-colors"
+              >
+                {lang === 'zh' ? 'EN' : '中'}
+              </button>
+              <div className="text-4xl text-center mb-4">{'\uD83C\uDF1F'}</div>
               <h1 className="text-white text-lg font-bold text-center mb-2">
-                你好！我是 Miru
+                {t('welcome.hello')}
               </h1>
               <p className="text-white/60 text-sm text-center mb-6">
-                我是你的桌面小伙伴！让我先做个简单的设置~
+                {t('welcome.intro')}
               </p>
               <button onClick={() => setStep('provider')} className="btn-primary w-full">
-                开始设置
+                {t('welcome.start')}
               </button>
             </StepContainer>
           )}
 
           {step === 'provider' && (
             <StepContainer key="provider">
-              <h2 className="text-white text-base font-bold mb-4">选择 AI 服务</h2>
+              <h2 className="text-white text-base font-bold mb-4">{t('welcome.selectAI')}</h2>
               <div className="space-y-2 mb-4 max-h-[240px] overflow-y-auto">
                 {PROVIDERS.map((p) => (
                   <button
@@ -120,14 +147,14 @@ export default function Welcome() {
                 ))}
               </div>
               <button onClick={() => setStep('apikey')} className="btn-primary w-full">
-                下一步
+                {t('welcome.next')}
               </button>
             </StepContainer>
           )}
 
           {step === 'apikey' && (
             <StepContainer key="apikey">
-              <h2 className="text-white text-base font-bold mb-2">配置 {providerInfo.name}</h2>
+              <h2 className="text-white text-base font-bold mb-2">{t('welcome.configure')} {providerInfo.name}</h2>
 
               {providerInfo.needsKey && (
                 <>
@@ -135,7 +162,7 @@ export default function Welcome() {
                   <input
                     type="password"
                     value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
+                    onChange={(e) => { setApiKey(e.target.value); setTestResult(null) }}
                     placeholder={providerInfo.placeholder}
                     className="w-full bg-white/10 text-white text-sm rounded-lg px-3 py-2 mb-2 outline-none border border-white/10 focus:border-blue-400/50 placeholder:text-white/20"
                   />
@@ -148,7 +175,7 @@ export default function Welcome() {
                   <input
                     type="text"
                     value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
+                    onChange={(e) => { setBaseUrl(e.target.value); setTestResult(null) }}
                     placeholder={providerInfo.defaultBaseUrl}
                     className="w-full bg-white/10 text-white text-sm rounded-lg px-3 py-2 mb-2 outline-none border border-white/10 focus:border-blue-400/50 placeholder:text-white/20"
                   />
@@ -161,7 +188,7 @@ export default function Welcome() {
                   <input
                     type="text"
                     value={groupId}
-                    onChange={(e) => setGroupId(e.target.value)}
+                    onChange={(e) => { setGroupId(e.target.value); setTestResult(null) }}
                     placeholder="Group ID"
                     className="w-full bg-white/10 text-white text-sm rounded-lg px-3 py-2 mb-2 outline-none border border-white/10 focus:border-blue-400/50 placeholder:text-white/20"
                   />
@@ -169,51 +196,75 @@ export default function Welcome() {
               )}
 
               {testResult && (
-                <p className="text-yellow-400/80 text-xs mb-3">{testResult}</p>
+                <p className={`text-xs mb-3 ${testResult.ok ? 'text-green-400/80' : 'text-yellow-400/80'}`}>
+                  {testResult.ok ? '\u2705 ' : ''}{testResult.msg}
+                </p>
               )}
               <button
                 onClick={handleTestAndSave}
                 disabled={testing}
                 className="btn-primary w-full disabled:opacity-40 mt-2"
               >
-                {testing ? '测试中...' : '连接'}
+                {testing ? t('welcome.testing') : t('welcome.test')}
               </button>
               <button
-                onClick={() => setStep('provider')}
+                onClick={() => { setStep('provider'); setTestResult(null) }}
                 className="w-full text-white/40 text-xs mt-2 hover:text-white/60"
               >
-                返回
+                {t('welcome.back')}
               </button>
             </StepContainer>
           )}
 
           {step === 'features' && (
             <StepContainer key="features">
-              <h2 className="text-white text-base font-bold mb-3">Miru 可以做的事</h2>
+              <h2 className="text-white text-base font-bold mb-3">{t('welcome.features')}</h2>
               <div className="space-y-2 mb-4 text-sm">
-                <p className="text-white/70"><span className="text-white/40 mr-2">{'\uD83D\uDCAC'}</span>对话 — 聊天、搜索、写代码、解答问题</p>
-                <p className="text-white/70"><span className="text-white/40 mr-2">{'\uD83D\uDEE0'}</span>工具 — 整理文件、打开应用、系统操作</p>
-                <p className="text-white/70"><span className="text-white/40 mr-2">{'\uD83D\uDC41'}</span>值守 — 监控窗口、自动回复消息</p>
-                <p className="text-white/70"><span className="text-white/40 mr-2">{'\uD83C\uDFA4'}</span>语音 — 说话输入 (Alt+M)，朗读回复</p>
+                <p className="text-white/70"><span className="text-white/40 mr-2">{'\uD83D\uDCAC'}</span>{t('welcome.feat.chat')}</p>
+                <p className="text-white/70"><span className="text-white/40 mr-2">{'\uD83D\uDEE0'}</span>{t('welcome.feat.tools')}</p>
+                <p className="text-white/70"><span className="text-white/40 mr-2">{'\uD83D\uDC41'}</span>{t('welcome.feat.watch')}</p>
+                <p className="text-white/70"><span className="text-white/40 mr-2">{'\uD83C\uDFA4'}</span>{t('welcome.feat.voice')}</p>
               </div>
-              <p className="text-white/30 text-xs mb-4 text-center">输入 / 查看更多命令 · 右键开启管理面板</p>
+              <p className="text-white/30 text-xs mb-4 text-center">{t('welcome.featHint')}</p>
               <button onClick={() => setStep('done')} className="btn-primary w-full">
-                开始使用 Miru {'\u2728'}
+                {t('welcome.begin')} {'\u2728'}
               </button>
             </StepContainer>
           )}
 
           {step === 'done' && (
             <StepContainer key="done">
-              <div className="text-4xl text-center mb-4">🎉</div>
+              <div className="text-4xl text-center mb-4">{'\uD83C\uDF89'}</div>
               <h2 className="text-white text-lg font-bold text-center mb-2">
-                设置完成！
+                {t('welcome.done')}
               </h2>
-              <p className="text-white/60 text-sm text-center mb-6">
-                点击我就可以聊天啦~ 我可以帮你整理文件、打开应用、记住你的习惯！
+              <p className="text-white/60 text-sm text-center mb-4">
+                {t('welcome.tryPrompt')}
               </p>
-              <button onClick={handleComplete} className="btn-primary w-full">
-                开始使用 Miru ✨
+              <div className="space-y-2 mb-4">
+                {[
+                  t('welcome.example.organize'),
+                  t('welcome.example.abilities'),
+                  t('welcome.example.hello'),
+                ].map((example) => (
+                  <button
+                    key={example}
+                    onClick={() => {
+                      setOnboarded(true)
+                      setPendingPrompt(example)
+                      openChat()
+                    }}
+                    className="w-full text-left px-4 py-3 rounded-xl text-sm bg-white/5 text-white/70 border border-white/10 hover:bg-white/10 hover:border-blue-400/30 transition-all"
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={handleComplete}
+                className="w-full text-white/40 text-xs hover:text-white/60 transition-colors"
+              >
+                {t('welcome.skip')}
               </button>
             </StepContainer>
           )}

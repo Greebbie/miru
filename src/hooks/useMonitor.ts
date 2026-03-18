@@ -4,6 +4,8 @@ import { useChatStore } from '@/stores/chatStore'
 import { toolRegistry } from '@/core/tools'
 import { skillRegistry } from '@/core/skills/registry'
 import { executeSkill } from '@/core/skills/executor'
+import { startVisionMonitor, stopVisionMonitor, isVisionMonitorRunning } from './useVisionMonitor'
+import { t } from '@/i18n/useI18n'
 
 const APP_ALIASES: Record<string, string[]> = {
   wechat: ['wechat', 'weixin', '微信'],
@@ -22,6 +24,9 @@ function matchTrigger(trigger: { type: string; pattern: string; app?: string }, 
       } catch {
         return data.title.toLowerCase().includes(trigger.pattern.toLowerCase())
       }
+    case 'content_change':
+      // Handled by vision monitor, not window-change events
+      return false
     default:
       return false
   }
@@ -63,6 +68,26 @@ async function executeAction(
       }
       break
     }
+
+    case 'send_keys_to_app': {
+      try {
+        if (data.app) {
+          await window.electronAPI?.focusWindow(data.app)
+          await new Promise(r => setTimeout(r, 500))
+        }
+        await window.electronAPI?.sendKeys(action.payload)
+        chatStore.addMessage({
+          role: 'assistant',
+          content: t('monitor.keysSent').replace('{app}', data.app || 'active window').replace('{keys}', action.payload),
+        })
+      } catch {
+        chatStore.addMessage({
+          role: 'assistant',
+          content: t('monitor.keysFailed'),
+        })
+      }
+      break
+    }
   }
 }
 
@@ -93,9 +118,10 @@ function handleWindowChanged(data: { app: string; title: string }) {
     executeAction(rule.action, data)
   }
 
-  // Check auto-reply rules
+  // Check auto-reply rules (skip rules with triggerKeywords — handled by vision monitor)
   for (const rule of autoReplyRules) {
     if (!rule.enabled) continue
+    if (rule.triggerKeywords?.length) continue
     if (!matchAutoReplyApp(rule.app, data.app)) continue
 
     // Contact pattern check
@@ -111,13 +137,13 @@ function handleWindowChanged(data: { app: string; title: string }) {
     if (rule.idleMinutes && (Date.now() - lastUserInput) < rule.idleMinutes * 60000) continue
 
     // Generate reply
-    const reply = rule.replyTemplate || '稍等，我马上回来'
+    const reply = rule.replyTemplate || t('monitor.autoReplyDefault')
 
     if (rule.requireConfirm) {
       const chatStore = useChatStore.getState()
       chatStore.addMessage({
         role: 'assistant',
-        content: `检测到 ${data.app} 消息，要自动回复「${reply}」吗？`,
+        content: t('monitor.autoReplyDetected').replace('{app}', data.app).replace('{reply}', reply),
       })
       chatStore.setPendingConfirm({
         toolName: 'auto_reply',
@@ -128,7 +154,7 @@ function handleWindowChanged(data: { app: string; title: string }) {
         },
         onCancel: () => {
           useChatStore.getState().setPendingConfirm(null)
-          useChatStore.getState().addMessage({ role: 'assistant', content: '好的，不回复了~' })
+          useChatStore.getState().addMessage({ role: 'assistant', content: t('monitor.autoReplyCancelled') })
         },
       })
       chatStore.openChat()
@@ -156,6 +182,16 @@ export function useMonitor() {
         window.electronAPI?.offWindowChanged?.()
         isRunningRef.current = false
       }
+
+      // Vision monitor lifecycle
+      const hasVisionRules = admin.monitorRules.some(r => r.enabled && r.trigger.type === 'content_change')
+        || admin.autoReplyRules.some(r => r.enabled && r.triggerKeywords?.length)
+
+      if (hasVisionRules && !isVisionMonitorRunning()) {
+        startVisionMonitor()
+      } else if (!hasVisionRules && isVisionMonitorRunning()) {
+        stopVisionMonitor()
+      }
     }
 
     // Initial check
@@ -171,6 +207,9 @@ export function useMonitor() {
         window.electronAPI?.offWindowChanged?.()
         isRunningRef.current = false
       }
+      if (isVisionMonitorRunning()) {
+        stopVisionMonitor()
+      }
     }
   }, [])
 }
@@ -184,12 +223,12 @@ async function sendAutoReply(app: string, reply: string) {
     await window.electronAPI?.sendKeys('^v{ENTER}')
     useChatStore.getState().addMessage({
       role: 'assistant',
-      content: `已向 ${app} 发送自动回复: ${reply}`,
+      content: t('monitor.autoReplySent').replace('{app}', app).replace('{reply}', reply),
     })
   } catch {
     useChatStore.getState().addMessage({
       role: 'assistant',
-      content: `自动回复发送失败，Miru 不太确定怎么操作 ${app}...`,
+      content: t('monitor.autoReplyFailed').replace('{app}', app),
     })
   }
 }

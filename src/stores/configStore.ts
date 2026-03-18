@@ -16,6 +16,12 @@ interface ConfigData {
   visionEnabled: boolean
   ttsEnabled: boolean
   isOnboarded: boolean
+  userName: string
+  thirdPerson: boolean
+  screenTimeReminder: number  // 0=off, 30/60/120 minutes
+  tokenBudget: 'minimal' | 'balanced' | 'smart'
+  sttModel: string
+  sttLanguage: 'auto' | 'zh' | 'en'
 }
 
 interface ConfigState extends ConfigData {
@@ -33,6 +39,12 @@ interface ConfigState extends ConfigData {
   setVisionEnabled: (enabled: boolean) => void
   setTtsEnabled: (enabled: boolean) => void
   setOnboarded: (onboarded: boolean) => void
+  setUserName: (name: string) => void
+  setThirdPerson: (v: boolean) => void
+  setScreenTimeReminder: (minutes: number) => void
+  setTokenBudget: (budget: 'minimal' | 'balanced' | 'smart') => void
+  setSttModel: (model: string) => void
+  setSttLanguage: (lang: 'auto' | 'zh' | 'en') => void
   updateConfig: (partial: Partial<ConfigState>) => void
 }
 
@@ -51,6 +63,12 @@ function extractData(state: ConfigState): ConfigData {
     visionEnabled: state.visionEnabled,
     ttsEnabled: state.ttsEnabled,
     isOnboarded: state.isOnboarded,
+    userName: state.userName,
+    thirdPerson: state.thirdPerson,
+    screenTimeReminder: state.screenTimeReminder,
+    tokenBudget: state.tokenBudget,
+    sttModel: state.sttModel,
+    sttLanguage: state.sttLanguage,
   }
 }
 
@@ -73,6 +91,12 @@ export const useConfigStore = create<ConfigState>((set) => ({
   visionEnabled: false,
   ttsEnabled: false,
   isOnboarded: false,
+  userName: '',
+  thirdPerson: false,
+  screenTimeReminder: 0,
+  tokenBudget: 'balanced',
+  sttModel: 'Xenova/whisper-tiny',
+  sttLanguage: 'auto',
   isLoading: true,
 
   init: async () => {
@@ -99,5 +123,11 @@ export const useConfigStore = create<ConfigState>((set) => ({
   setVisionEnabled: (visionEnabled) => { set({ visionEnabled }); persistConfig() },
   setTtsEnabled: (ttsEnabled) => { set({ ttsEnabled }); persistConfig() },
   setOnboarded: (isOnboarded) => { set({ isOnboarded }); persistConfig() },
+  setUserName: (userName) => { set({ userName }); persistConfig() },
+  setThirdPerson: (thirdPerson) => { set({ thirdPerson }); persistConfig() },
+  setScreenTimeReminder: (screenTimeReminder) => { set({ screenTimeReminder }); persistConfig() },
+  setTokenBudget: (tokenBudget) => { set({ tokenBudget }); persistConfig() },
+  setSttModel: (sttModel) => { set({ sttModel }); persistConfig() },
+  setSttLanguage: (sttLanguage) => { set({ sttLanguage }); persistConfig() },
   updateConfig: (partial) => { set(partial); persistConfig() },
 }))

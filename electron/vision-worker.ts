@@ -3,14 +3,61 @@
  * Runs ONNX YOLO inference and Tesseract OCR off the main thread.
  */
 
-import { parentPort } from 'worker_threads'
-import { createRequire } from 'module'
+/* eslint-disable @typescript-eslint/no-var-requires */
+const { parentPort } = require('worker_threads')
+const { createRequire } = require('module')
+const fs = require('fs') as typeof import('fs')
+const path = require('path') as typeof import('path')
+const https = require('https') as typeof import('https')
 
-const require = createRequire(import.meta.url)
-const ort = require('onnxruntime-node')
-const sharp = require('sharp')
-const Tesseract = require('tesseract.js')
-const { ensureModel } = require('./models')
+const nativeRequire = createRequire(__filename)
+const ort = nativeRequire('onnxruntime-node')
+const sharp = nativeRequire('sharp')
+const Tesseract = nativeRequire('tesseract.js')
+
+// Inlined from models.ts to avoid cross-module CJS/ESM issues in worker_threads
+const YOLO_URL = (process.env.HF_MIRROR || 'https://hf-mirror.com') + '/s1777/yolo-v8n-onnx/resolve/main/yolov8n.onnx'
+
+async function ensureModel(modelDir: string, modelName: string): Promise<string> {
+  const modelPath = path.join(modelDir, `${modelName}.onnx`)
+  if (fs.existsSync(modelPath)) return modelPath
+  if (!fs.existsSync(modelDir)) fs.mkdirSync(modelDir, { recursive: true })
+  await downloadFile(YOLO_URL, modelPath)
+  return modelPath
+}
+
+function downloadFile(url: string, dest: string, maxRedirects = 5): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const doRequest = (reqUrl: string, redirectsLeft: number) => {
+      const file = fs.createWriteStream(dest)
+      const protocol = reqUrl.startsWith('http://') ? nativeRequire('http') : https
+      protocol.get(reqUrl, { timeout: 120000 }, (res: import('http').IncomingMessage) => {
+        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
+          file.close()
+          try { fs.unlinkSync(dest) } catch { /* ignore */ }
+          const location = res.headers.location
+          if (!location) { reject(new Error('Redirect without location')); return }
+          if (redirectsLeft <= 0) { reject(new Error('Too many redirects')); return }
+          doRequest(location, redirectsLeft - 1)
+          return
+        }
+        if (res.statusCode !== 200) {
+          file.close()
+          try { fs.unlinkSync(dest) } catch { /* ignore */ }
+          reject(new Error(`Download failed: ${res.statusCode}`))
+          return
+        }
+        res.pipe(file)
+        file.on('finish', () => { file.close(); resolve() })
+      }).on('error', (err: Error) => {
+        file.close()
+        try { fs.unlinkSync(dest) } catch { /* ignore */ }
+        reject(err)
+      })
+    }
+    doRequest(url, maxRedirects)
+  })
+}
 
 // COCO 80 class labels
 const COCO_LABELS = [

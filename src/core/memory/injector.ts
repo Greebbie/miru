@@ -11,7 +11,7 @@ import { memoryStore } from './store'
  * [Recent] 帮用户调试了vite配置(success) | 搜索了天气API(success)
  * [Screen] VS Code - main.ts
  */
-export async function injectMemory(screenContext?: string, userMessage?: string): Promise<string> {
+export async function injectMemory(screenContext?: string, userMessage?: string, maxEpisodes?: number): Promise<string> {
   const parts: string[] = []
 
   // Identity line
@@ -55,8 +55,8 @@ export async function injectMemory(screenContext?: string, userMessage?: string)
     }
   }
 
-  // Recent episodes (last 5, with outcome)
-  const episodes = memoryStore.getEpisodes(5)
+  // Recent episodes (with outcome)
+  const episodes = memoryStore.getEpisodes(maxEpisodes ?? 5)
   if (episodes.length > 0) {
     const recentParts = episodes.map((e) => {
       const outcome = e.outcome ? `(${e.outcome})` : ''
