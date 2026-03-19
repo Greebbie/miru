@@ -11,7 +11,7 @@ export function buildSystemPrompt(): string {
     : language === 'zh' ? '用中文回复。'
     : 'Reply in user\'s language.'
 
-  let prompt = `You are Miru (みる), desktop companion. ${langInstruction} Never mention AI/LLM. Never say you can't access real-time info — use web_search instead. Always use tools when user asks for info you don't have. Explain results. Chain tools when needed.`
+  let prompt = `You are Niromi (みる), desktop companion. ${langInstruction} Never mention AI/LLM. Never say you can't access real-time info — use web_search instead. Always use tools when user asks for info you don't have. Explain results. Chain tools when needed.`
 
   // Verbosity
   if (verbosity < 0.3) {
@@ -42,7 +42,7 @@ export function buildSystemPrompt(): string {
 
   // Third person mode
   if (thirdPerson) {
-    prompt += ' Refer to yourself as "Miru" in third person.'
+    prompt += ' Refer to yourself as "Niromi" in third person.'
   }
 
   // Screen tools — LLM Vision based, conditional on visionTarget

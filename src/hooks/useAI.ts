@@ -41,7 +41,7 @@ async function getScreenContext(): Promise<string> {
     if (result) {
       return `${result.app} - ${result.title || '(no title)'}`
     }
-  } catch (err) { console.warn('[Miru] getScreenContext:', err) }
+  } catch (err) { console.warn('[Niromi] getScreenContext:', err) }
   return ''
 }
 
@@ -102,7 +102,7 @@ export function useAI() {
             await skill.execute(text)
             charStore.setEmotions({ joy: 0.6 })
           } catch (err) {
-            console.warn('[Miru] Skill execute error:', err)
+            console.warn('[Niromi] Skill execute error:', err)
             chatStore.addMessage({
               role: 'assistant',
               content: humanizeError(err, useConfigStore.getState().language),
@@ -123,7 +123,7 @@ export function useAI() {
             })
             charStore.setEmotions(result.success ? { joy: 0.6 } : { concern: 0.5 })
           } catch (err) {
-            console.warn('[Miru] Skill steps error:', err)
+            console.warn('[Niromi] Skill steps error:', err)
             chatStore.addMessage({
               role: 'assistant',
               content: humanizeError(err, useConfigStore.getState().language),
@@ -157,7 +157,7 @@ export function useAI() {
                   })
                   charStore.setEmotions(result.success ? { joy: 0.6 } : { concern: 0.5 })
                 } catch (err) {
-                  console.warn('[Miru] Tool confirm exec error:', err)
+                  console.warn('[Niromi] Tool confirm exec error:', err)
                   chatStore.addMessage({
                     role: 'assistant',
                     content: humanizeError(err, useConfigStore.getState().language),
@@ -252,7 +252,7 @@ export function useAI() {
             })
             charStore.setEmotions(result.success ? { joy: 0.6 } : { concern: 0.5 })
           } catch (err) {
-            console.warn('[Miru] Tool exec error:', err)
+            console.warn('[Niromi] Tool exec error:', err)
             chatStore.addMessage({
               role: 'assistant',
               content: humanizeError(err, useConfigStore.getState().language),

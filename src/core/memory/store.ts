@@ -25,7 +25,7 @@ export interface Episode {
   timestamp: number
   summary: string
   userIntent?: string
-  miruActions?: string[]
+  niromiActions?: string[]
   toolsUsed?: string[]
   outcome?: 'success' | 'partial' | 'failed' | 'cancelled'
 }
@@ -45,7 +45,7 @@ interface MemoryCache {
   facts: Fact[]
 }
 
-const LEGACY_STORE_KEY = 'miru-memory'
+const LEGACY_STORE_KEY = 'niromi-memory'
 
 let cached: MemoryCache = { identity: {}, preferences: {}, episodes: [], facts: [] }
 let useSqlite = false
@@ -102,7 +102,7 @@ export const memoryStore = {
             timestamp: ep.timestamp,
             summary: ep.summary || '',
             userIntent: ep.userIntent || '',
-            miruActions: ep.miruActions || [],
+            niromiActions: ep.niromiActions || [],
             toolsUsed: ep.toolsUsed || [],
             outcome: ep.outcome || 'success',
           })),

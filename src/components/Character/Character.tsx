@@ -3,7 +3,7 @@ import { useCharacterStore } from '@/stores/characterStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useSkillConfigStore } from '@/stores/skillConfigStore'
 import { expressionMap } from './expressions'
-import miruPng from '@/assets/miru.png'
+import niromiPng from '@/assets/niromi.png'
 import { playSound } from '@/core/sound'
 
 const IMG_WIDTH = 140
@@ -201,17 +201,17 @@ export default function Character() {
         ref={animDivRef}
         className="absolute inset-0 flex items-center justify-center"
         style={{
-          animation: `miru-float ${expr.breathSpeed}s ease-in-out infinite`
-            + (expr.bounce > 0 ? `, miru-bounce ${expr.breathSpeed * 0.5}s ease-in-out infinite` : '')
-            + (isIdle ? ', miru-fidget 8s ease-in-out infinite' : ''),
+          animation: `niromi-float ${expr.breathSpeed}s ease-in-out infinite`
+            + (expr.bounce > 0 ? `, niromi-bounce ${expr.breathSpeed * 0.5}s ease-in-out infinite` : '')
+            + (isIdle ? ', niromi-fidget 8s ease-in-out infinite' : ''),
         }}
       >
         {/* Main character image */}
         <div className="relative">
           <img
             ref={imgRef}
-            src={miruPng}
-            alt="Miru"
+            src={niromiPng}
+            alt="Niromi"
             draggable={false}
             style={{
               width: IMG_WIDTH,
@@ -304,7 +304,7 @@ export default function Character() {
                 fontSize: 10,
                 lineHeight: 1,
                 pointerEvents: 'none',
-                animation: 'miru-duty-pulse 2s ease-in-out infinite',
+                animation: 'niromi-duty-pulse 2s ease-in-out infinite',
               }}
             >
               🌙
@@ -317,21 +317,21 @@ export default function Character() {
 }
 
 const KEYFRAMES = `
-@keyframes miru-float {
+@keyframes niromi-float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-4px); }
 }
-@keyframes miru-bounce {
+@keyframes niromi-bounce {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
 }
-@keyframes miru-fidget {
+@keyframes niromi-fidget {
   0%, 100% { transform: translateY(0) rotate(0deg); }
   25% { transform: translateY(-1px) rotate(-0.5deg); }
   50% { transform: translateY(1px) rotate(0.3deg); }
   75% { transform: translateY(-0.5px) rotate(-0.2deg); }
 }
-@keyframes miru-duty-pulse {
+@keyframes niromi-duty-pulse {
   0%, 100% { opacity: 0.8; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.1); }
 }

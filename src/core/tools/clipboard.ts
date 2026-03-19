@@ -9,7 +9,7 @@ toolRegistry.register({
   category: 'clipboard',
   execute: async () => {
     if (!window.electronAPI) {
-      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+      return { success: false, data: null, summary: 'Niromi 的系统接口还没准备好，请稍后再试' }
     }
     try {
       const text = await window.electronAPI.clipboardRead()
@@ -38,7 +38,7 @@ toolRegistry.register({
   category: 'clipboard',
   execute: async (params) => {
     if (!window.electronAPI) {
-      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+      return { success: false, data: null, summary: 'Niromi 的系统接口还没准备好，请稍后再试' }
     }
     try {
       await window.electronAPI.clipboardWrite(params.text as string)

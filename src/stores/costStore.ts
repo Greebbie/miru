@@ -57,7 +57,7 @@ export const useCostStore = create<CostState>((set, get) => ({
           monthlyDate: month,
         })
       }
-    }).catch((err) => { console.warn('[Miru] Failed to load cost data:', err) })
+    }).catch((err) => { console.warn('[Niromi] Failed to load cost data:', err) })
   },
 
   addUsage: (tokensIn, tokensOut, provider, model) => {

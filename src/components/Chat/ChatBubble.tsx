@@ -68,7 +68,7 @@ export default function ChatBubble({ onOpenSettings, onOpenAdmin }: ChatBubblePr
             {/* Header bar */}
             <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/10">
               <div className="flex items-center gap-1.5">
-                <span className="text-white/70 text-xs font-medium">Miru</span>
+                <span className="text-white/70 text-xs font-medium">Niromi</span>
                 {hasActiveRules && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" title="Monitor active" />}
                 <CostBadge />
               </div>

@@ -21,7 +21,7 @@ import { useScreenTime } from '@/hooks/useScreenTime'
 // Register skills once on module load
 registerBuiltinSkills()
 
-const HINT_STORAGE_KEY = 'miru-hint-shown'
+const HINT_STORAGE_KEY = 'niromi-hint-shown'
 
 export default function App() {
   const { isOnboarded, isLoading } = useConfigStore()

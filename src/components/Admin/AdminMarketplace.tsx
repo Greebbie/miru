@@ -63,7 +63,7 @@ export default function AdminMarketplace() {
       icon: s.icon,
       category: s.category,
       description: s.description,
-      author: 'miru-team',
+      author: 'niromi-team',
       version: '1.0.0',
       source: 'builtin',
       riskLevel: 'low',

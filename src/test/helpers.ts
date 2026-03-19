@@ -66,7 +66,7 @@ export function createMockElectronAPI(overrides?: Partial<Record<string, any>>) 
     captureWindow: vi.fn().mockResolvedValue('data:image/jpeg;base64,/9j/window-mock'),
 
     // Skills
-    skillGetDir: vi.fn().mockResolvedValue('C:\\Users\\test\\.miru\\skills'),
+    skillGetDir: vi.fn().mockResolvedValue('C:\\Users\\test\\.niromi\\skills'),
     skillScanLocal: vi.fn().mockResolvedValue([]),
     skillInstall: vi.fn().mockResolvedValue({ success: true, skillDir: '' }),
     skillUninstall: vi.fn().mockResolvedValue(undefined),

@@ -19,7 +19,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('[Miru] Component crash:', error, info)
+    console.error('[Niromi] Component crash:', error, info)
   }
 
   render() {

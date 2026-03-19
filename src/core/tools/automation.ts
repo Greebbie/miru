@@ -18,7 +18,7 @@ toolRegistry.register({
     const app = params.app as string
     const message = params.message as string
     if (!window.electronAPI) {
-      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好' }
+      return { success: false, data: null, summary: 'Niromi 的系统接口还没准备好' }
     }
     try {
       // 1. Focus the target app window
@@ -64,7 +64,7 @@ toolRegistry.register({
     const app = params.app as string
     const text = params.text as string
     if (!window.electronAPI) {
-      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好' }
+      return { success: false, data: null, summary: 'Niromi 的系统接口还没准备好' }
     }
     try {
       await window.electronAPI.focusWindow(app)

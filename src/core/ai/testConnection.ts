@@ -110,7 +110,7 @@ export async function testConnection(
           return null
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
-          console.error('[Miru] Minimax test failed:', msg)
+          console.error('[Niromi] Minimax test failed:', msg)
           return msg || 'fetch failed'
         }
       }
@@ -134,7 +134,7 @@ export async function testConnection(
     }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
-    console.error(`[Miru] testConnection(${provider}) failed:`, errMsg)
+    console.error(`[Niromi] testConnection(${provider}) failed:`, errMsg)
     if (err instanceof DOMException && err.name === 'AbortError') return 'timeout'
     return errMsg || 'fetch failed'
   } finally {

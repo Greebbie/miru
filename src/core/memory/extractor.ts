@@ -79,11 +79,11 @@ export function extractFromConversation(messages: Message[]) {
   }
 
   // --- Episode construction (full conversation scan) ---
-  const { summary, userIntent, miruActions, toolsUsed, outcome } = summarizeConversation(messages)
+  const { summary, userIntent, niromiActions, toolsUsed, outcome } = summarizeConversation(messages)
 
   // Only store episode if there was meaningful interaction
   if (userIntent) {
-    memoryStore.addEpisode({ summary, userIntent, miruActions, toolsUsed, outcome })
+    memoryStore.addEpisode({ summary, userIntent, niromiActions, toolsUsed, outcome })
   }
 
   // --- Frequency statistics ---

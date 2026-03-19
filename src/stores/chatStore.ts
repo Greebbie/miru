@@ -91,7 +91,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (Array.isArray(saved) && saved.length > 0) {
         set({ messages: saved as Message[] })
       }
-    }).catch((err) => { console.warn('[Miru] Failed to load chat history:', err) })
+    }).catch((err) => { console.warn('[Niromi] Failed to load chat history:', err) })
   },
 
   addMessage: (msg) => {

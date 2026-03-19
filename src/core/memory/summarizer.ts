@@ -8,7 +8,7 @@ import type { Message } from '@/stores/chatStore'
 export function summarizeConversation(messages: Message[]): {
   summary: string
   userIntent: string
-  miruActions: string[]
+  niromiActions: string[]
   toolsUsed: string[]
   outcome: 'success' | 'partial' | 'failed' | 'cancelled'
 } {
@@ -25,13 +25,13 @@ export function summarizeConversation(messages: Message[]): {
   const allToolCalls = messages.flatMap((m) => m.toolCalls || [])
   const toolsUsed = [...new Set(allToolCalls.map((tc) => tc.name))]
 
-  // Extract miru actions from assistant summary lines (📎 ...)
-  const miruActions: string[] = []
+  // Extract niromi actions from assistant summary lines (📎 ...)
+  const niromiActions: string[] = []
   for (const msg of assistantMessages) {
     const lines = msg.content.split('\n')
     for (const line of lines) {
       const match = line.match(/📎\s*(.+)/)
-      if (match) miruActions.push(match[1].trim())
+      if (match) niromiActions.push(match[1].trim())
     }
   }
 
@@ -52,7 +52,7 @@ export function summarizeConversation(messages: Message[]): {
   return {
     summary: parts.join('，'),
     userIntent,
-    miruActions,
+    niromiActions,
     toolsUsed,
     outcome,
   }

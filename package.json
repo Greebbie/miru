@@ -1,7 +1,7 @@
 {
-  "name": "miru",
+  "name": "niromi",
   "version": "0.1.0",
-  "description": "Miru (みる) — AI Desktop Companion",
+  "description": "Niromi (みる) — AI Desktop Companion",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -44,11 +44,11 @@
     "vitest": "^2.1.8"
   },
   "build": {
-    "appId": "com.miru.app",
-    "productName": "Miru",
+    "appId": "com.niromi.app",
+    "productName": "Niromi",
     "win": {
       "target": "nsis",
-      "icon": "miru.png"
+      "icon": "niromi.png"
     },
     "nsis": {
       "oneClick": true,
@@ -60,8 +60,8 @@
     ],
     "extraResources": [
       {
-        "from": "miru.png",
-        "to": "miru.png"
+        "from": "niromi.png",
+        "to": "niromi.png"
       }
     ]
   }

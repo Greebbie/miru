@@ -50,7 +50,7 @@ export async function initMarketplaceSkills(): Promise<void> {
       }
     }
   } catch (err) {
-    console.warn('[Miru] Failed to init marketplace skills:', err)
+    console.warn('[Niromi] Failed to init marketplace skills:', err)
   }
 }
 
@@ -127,7 +127,7 @@ export async function installSkill(entry: MarketplaceIndexEntry): Promise<boolea
 
     return true
   } catch (err) {
-    console.error('[Miru] Install skill failed:', err)
+    console.error('[Niromi] Install skill failed:', err)
     return false
   }
 }

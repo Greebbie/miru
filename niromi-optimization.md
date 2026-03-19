@@ -1,19 +1,19 @@
-# Miru 优化层：六个视角的终极审视
+# Niromi 优化层：六个视角的终极审视
 
-本文档是 miru-final-plan.md 的补充，不替代主文档，而是从六个专家视角优化关键细节。
+本文档是 niromi-final-plan.md 的补充，不替代主文档，而是从六个专家视角优化关键细节。
 
 ---
 
-## 视角 1：最强设计师 — 让 Miru 活着
+## 视角 1：最强设计师 — 让 Niromi 活着
 
 ### 主文档的问题
 
-角色只有 7 个表情状态，切换是硬编码的（AI 回复时 → thinking，执行时 → working）。这会让 Miru 感觉像一个状态机，不像一个活物。
+角色只有 7 个表情状态，切换是硬编码的（AI 回复时 → thinking，执行时 → working）。这会让 Niromi 感觉像一个状态机，不像一个活物。
 
 ### 优化：微状态 + 呼吸感
 
 ```
-核心原则：Miru 在没有任何交互时也应该看起来"活着"。
+核心原则：Niromi 在没有任何交互时也应该看起来"活着"。
 
 idle 不是一个状态，而是一组微行为：
 - 眨眼（随机间隔 3-8 秒）
@@ -46,39 +46,39 @@ characterStore 里不存 enum state，存 emotion 数值：
 
 sprite 选择基于最高 emotion 值。
 数值在一段时间后缓慢衰减回 0（exponential decay）。
-这样 Miru 完成任务后会"开心一会儿"再慢慢回到平静，而不是瞬间切换。
+这样 Niromi 完成任务后会"开心一会儿"再慢慢回到平静，而不是瞬间切换。
 ```
 
 ### 优化：对话窗口的物理感
 
 ```
-对话窗口不是"弹出"，而是从 Miru 身体里"长出来"：
-- 点击 Miru → 气泡从 Miru 头顶冒出，先小后大（spring animation）
-- 关闭 → 气泡缩回 Miru 身体里
+对话窗口不是"弹出"，而是从 Niromi 身体里"长出来"：
+- 点击 Niromi → 气泡从 Niromi 头顶冒出，先小后大（spring animation）
+- 关闭 → 气泡缩回 Niromi 身体里
 - Framer Motion 的 spring physics: stiffness=300, damping=20
 
 消息不是"出现"，而是"浮上来"：
 - 新消息从底部滑入 + fade in，duration=200ms
-- AI 打字中 → Miru 的表情是 thinking + 气泡里有三个跳动的点
+- AI 打字中 → Niromi 的表情是 thinking + 气泡里有三个跳动的点
 
-确认弹窗不是模态框，而是 Miru 举着的卡片：
-- 确认内容显示为 Miru 身边的小卡片
+确认弹窗不是模态框，而是 Niromi 举着的卡片：
+- 确认内容显示为 Niromi 身边的小卡片
 - 按钮在卡片上
-- 视觉上像 Miru 在"展示给你看"
+- 视觉上像 Niromi 在"展示给你看"
 ```
 
 ### 优化：声音设计（微小但关键）
 
 ```
 可选的 UI 音效（默认开启，可关闭）：
-- 点击 Miru：软软的 "po" 声（像按到棉花糖）
+- 点击 Niromi：软软的 "po" 声（像按到棉花糖）
 - 收到回复：轻微的叮声
 - 完成任务：清脆的 ✨ 音效
 - 危险操作确认：略低沉的提示音
 
 音效文件总计 < 100KB（8bit 风格，与 pixel art 一致）
 
-不要用任何系统默认通知声。Miru 有自己的声音。
+不要用任何系统默认通知声。Niromi 有自己的声音。
 ```
 
 ---
@@ -92,11 +92,11 @@ sprite 选择基于最高 emotion 值。
 
 优化后：
 
-Step 1: "你好！我是 Miru 🌿"
+Step 1: "你好！我是 Niromi 🌿"
   只有一个按钮：[认识一下]
   （不要一上来就要 API key）
 
-Step 2: Miru 做自我介绍（动画 + 文字）
+Step 2: Niromi 做自我介绍（动画 + 文字）
   "我可以帮你整理文件、打开 app、记住你的习惯。
    不过我需要一把钥匙才能思考。"
   [给你钥匙]
@@ -121,10 +121,10 @@ Step 4: 填 API key
   [我填好了，试试连接]
 
 Step 5: 连接测试（关键！）
-  Miru 试着调 API → 
-  成功：Miru 跳起来 "太好了，我能思考了！"
-  失败：Miru 歪头 "好像连不上...key 对吗？"
-  不是冷冰冰的 error message，是 Miru 的反应。
+  Niromi 试着调 API → 
+  成功：Niromi 跳起来 "太好了，我能思考了！"
+  失败：Niromi 歪头 "好像连不上...key 对吗？"
+  不是冷冰冰的 error message，是 Niromi 的反应。
 
 Step 6: 第一个任务引导
   "试着跟我说点什么吧！比如..."
@@ -133,49 +133,49 @@ Step 6: 第一个任务引导
   💬 "你能做什么？"
   💬 "你好，我叫..."
   
-  用户说完第一句 → Miru 执行 → 完成 → 
+  用户说完第一句 → Niromi 执行 → 完成 → 
   "🎉 我们配合得不错！以后随时叫我。"
   引导结束。
 ```
 
-### 优化：Miru 在你不说话时也存在
+### 优化：Niromi 在你不说话时也存在
 
 ```
-不交互时的 Miru 行为（所有都是可选的，在设置里控制）：
+不交互时的 Niromi 行为（所有都是可选的，在设置里控制）：
 
 空闲 1 分钟后：
-  Miru 偶尔看一眼你的活动窗口标题，但不说话
+  Niromi 偶尔看一眼你的活动窗口标题，但不说话
   （只是眼睛方向变化，暗示它在关注你）
 
 空闲 5 分钟后：
-  Miru 开始"打盹"（sleeping 动画）
+  Niromi 开始"打盹"（sleeping 动画）
 
 空闲 30 分钟后：
-  Miru 可以冒出一个小气泡（不是弹窗，是角色旁的小文字）：
+  Niromi 可以冒出一个小气泡（不是弹窗，是角色旁的小文字）：
   "你已经看了 2 小时屏幕了...要不要休息一下？"
   （这个功能可开关，默认关闭）
 
 用户切换到新 app 时：
-  Miru 眼睛跟着新窗口方向看一下
+  Niromi 眼睛跟着新窗口方向看一下
   （视觉暗示：它注意到了你在做什么）
 ```
 
 ### 优化：错误处理也是体验
 
 ```
-API 调用失败 → 不是弹 error，是 Miru 的表情变困惑 + 气泡说话
+API 调用失败 → 不是弹 error，是 Niromi 的表情变困惑 + 气泡说话
   "我没听清...网络好像不太好。再说一次？"
 
-Token 不够 → Miru 的表情变有点为难
+Token 不够 → Niromi 的表情变有点为难
   "我的能量快用完了（今天的 token 快到了）。
    要不先做这些，其他明天再说？"
 
-操作失败（比如文件被占用）→ Miru 歪头
+操作失败（比如文件被占用）→ Niromi 歪头
   "没能移动这个文件...好像有其他程序在用它。
    要不要我等一下再试？"
 
 永远不显示技术性 error message 给用户。
-所有错误都翻译成 Miru 的话。
+所有错误都翻译成 Niromi 的话。
 技术详情藏在点击 "详情" 才展开的折叠区。
 ```
 
@@ -203,11 +203,11 @@ Token 不够 → Miru 的表情变有点为难
 当前 plan 的 system prompt 大约 400 tokens。优化到 200：
 
 不要这样（啰嗦）：
-  "You are Miru, a helpful desktop companion. Your name means 'to see/watch'
+  "You are Niromi, a helpful desktop companion. Your name means 'to see/watch'
    in Japanese. You see the user's screen, watch their habits..."
 
 要这样（精炼）：
-  "You are Miru (みる), a desktop companion. Concise, warm, playful.
+  "You are Niromi (みる), a desktop companion. Concise, warm, playful.
    Reply in user's language. Never say you're an AI."
 
 把性格特征编码为几个关键词，不要用句子描述。
@@ -274,9 +274,9 @@ LLM 从几个关键词就能推断出完整的行为模式。
   原本 10 轮对话 = 3000 tokens
   压缩后：
   "[Earlier: user asked to organize desktop files. 
-    Miru moved 7 screenshots to 截图/ folder.]
+    Niromi moved 7 screenshots to 截图/ folder.]
    User: 还有别的要整理的吗？
-   Miru: 我看到 Downloads 里有 23 个旧文件...
+   Niromi: 我看到 Downloads 里有 23 个旧文件...
    User: 那些也整理一下"
   = 约 400 tokens
 ```
@@ -366,12 +366,12 @@ facts 表加 previous_value 和 updated_at 字段。
 
 ### 主文档的问题
 
-当前没有任何个性化配置。所有用户的 Miru 性格完全一样。
+当前没有任何个性化配置。所有用户的 Niromi 性格完全一样。
 
 ### 优化：性格滑块
 
 ```
-设置 → Miru 的性格
+设置 → Niromi 的性格
 
 ┌─────────────────────────────────────────┐
 │ 说话风格                                │
@@ -405,15 +405,15 @@ facts 表加 previous_value 和 updated_at 字段。
 ### 优化：称呼系统
 
 ```
-Miru 怎么称呼用户：
+Niromi 怎么称呼用户：
 - 默认：不用称呼（直接说事）
 - 如果用户在设置里填了名字：用名字
 - 如果用户在对话里说了"叫我 XX"：自动更新
 
-Miru 怎么称呼自己：
+Niromi 怎么称呼自己：
 - 默认：不自称（直接说"我"）
-- 可选：用第三人称说"Miru 来帮你看看"（日式可爱）
-- 在设置里开关：[Miru 用第三人称说话 ○]
+- 可选：用第三人称说"Niromi 来帮你看看"（日式可爱）
+- 在设置里开关：[Niromi 用第三人称说话 ○]
 ```
 
 ### 优化：预设性格模板
@@ -504,9 +504,9 @@ Claude 的 tool calling 是流式的：
 
 在前端的表现应该是：
 
-1. LLM 开始回复 → Miru thinking 动画 + 文字逐字出现
+1. LLM 开始回复 → Niromi thinking 动画 + 文字逐字出现
 2. LLM 发出 tool_use → 
-   文字停止，Miru 切换到 working 动画
+   文字停止，Niromi 切换到 working 动画
    同时在对话里显示一个执行中的状态卡片：
    ┌──────────────────────┐
    │ 🔄 正在移动文件...    │
@@ -517,10 +517,10 @@ Claude 的 tool calling 是流式的：
    ┌──────────────────────┐
    │ ✅ 已移动 7 个文件    │
    └──────────────────────┘
-   Miru 切换到 happy 动画
+   Niromi 切换到 happy 动画
 4. LLM 继续输出总结文字
 
-关键：用户永远能看到"Miru 正在做什么"。
+关键：用户永远能看到"Niromi 正在做什么"。
 不是黑箱等待，而是实时反馈。
 ```
 
@@ -528,7 +528,7 @@ Claude 的 tool calling 是流式的：
 
 ## 整合进 Plan 的具体改动清单
 
-以下改动需要更新到 miru-final-plan.md：
+以下改动需要更新到 niromi-final-plan.md：
 
 ### Phase 1 增加
 - [ ] 角色呼吸动画（CSS transform 循环）
@@ -541,7 +541,7 @@ Claude 的 tool calling 是流式的：
 ### Phase 2 增加
 - [ ] Tool 结果压缩（list_files 等返回值在注入前压缩）
 - [ ] 流式 Tool Calling 的状态卡片 UI
-- [ ] 错误消息翻译为 Miru 的话（不显示技术 error）
+- [ ] 错误消息翻译为 Niromi 的话（不显示技术 error）
 - [ ] 两阶段 tool 调用（元工具 → 具体工具）
 
 ### Phase 3 修改
@@ -558,7 +558,7 @@ Claude 的 tool calling 是流式的：
 ### System Prompt 替换为
 
 ```
-You are Miru (みる), desktop companion. {personality_keywords}
+You are Niromi (みる), desktop companion. {personality_keywords}
 Reply in user's language. Never mention AI/LLM.
 
 [User] {compressed_identity_and_preferences}
@@ -605,5 +605,5 @@ Ollama 本地 → ¥0/月
   每天 ~200,000 tokens（社区报告）
   ~$6/天 = ~$180/月
 
-Miru 的 token 效率是 OpenClaw 的约 6-7 倍。
+Niromi 的 token 效率是 OpenClaw 的约 6-7 倍。
 ```

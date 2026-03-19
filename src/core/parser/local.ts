@@ -363,7 +363,7 @@ const patterns: Pattern[] = [
       return KNOWN_APPS.has(name) || name.length <= 10
     },
   },
-  // Bare "看看" / "你看看" / "看一下" — when vision target is set, user expects Miru to look
+  // Bare "看看" / "你看看" / "看一下" — when vision target is set, user expects Niromi to look
   {
     regex: /^(?:你)?(?:看看|看一下|看一眼|帮我看|帮我看看)[？?]?$/i,
     tool: 'describe_screen',

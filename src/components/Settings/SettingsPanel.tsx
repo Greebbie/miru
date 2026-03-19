@@ -294,7 +294,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
               {/* ── Vision (LLM) ── */}
               <FeatureSection
                 title={lang === 'zh' ? '\u89C6\u89C9\u529F\u80FD / Vision' : 'Vision'}
-                description={lang === 'zh' ? '\u5141\u8BB8 Miru \u67E5\u770B\u5C4F\u5E55\u5185\u5BB9\uFF08\u9700\u8981\u652F\u6301\u89C6\u89C9\u7684 AI \u6A21\u578B\uFF09' : 'Allow Miru to see screen content (requires vision-capable AI model)'}
+                description={lang === 'zh' ? '\u5141\u8BB8 Niromi \u67E5\u770B\u5C4F\u5E55\u5185\u5BB9\uFF08\u9700\u8981\u652F\u6301\u89C6\u89C9\u7684 AI \u6A21\u578B\uFF09' : 'Allow Niromi to see screen content (requires vision-capable AI model)'}
               >
                 {!isVisionCapable() && (
                   <p className="text-[10px] text-yellow-400/80 mb-1.5">

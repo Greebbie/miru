@@ -239,7 +239,7 @@ describe('screen tools', () => {
         const result = await toolRegistry.get(toolName)!.execute(params)
         expect(result.success).toBe(false)
         expect(result.data).toBeNull()
-        expect(result.summary).toContain('Miru')
+        expect(result.summary).toContain('Niromi')
       } finally {
         ;(window as any).electronAPI = savedAPI
       }

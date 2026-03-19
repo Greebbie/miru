@@ -247,7 +247,7 @@ export function registerBuiltinSkills() {
       const now = new Date()
       const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
       const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-      const notePath = `${home}/.miru/notes/${dateStr}.md`
+      const notePath = `${home}/.niromi/notes/${dateStr}.md`
 
       // Read existing content or start fresh
       let existing = ''
@@ -279,7 +279,7 @@ export function registerBuiltinSkills() {
     keywords: ['\u67E5\u7B14\u8BB0', '\u770B\u7B14\u8BB0', 'notes', 'view notes'],
     execute: async () => {
       const home = await window.electronAPI.getHomeDir()
-      const notesDir = `${home}/.miru/notes`
+      const notesDir = `${home}/.niromi/notes`
       try {
         const files = await window.electronAPI.listFiles(notesDir)
         const mdFiles = files.filter((f: { name: string; isDir: boolean }) => !f.isDir && f.name.endsWith('.md'))
@@ -408,7 +408,7 @@ export function registerBuiltinSkills() {
       const lines = skills.map((s) => `${s.icon} **${s.name}** (${s.nameEn}) - ${s.description}`)
       useChatStore.getState().addMessage({
         role: 'assistant',
-        content: `Miru \u53EF\u4EE5\u5E2E\u4F60\u505A\u8FD9\u4E9B\u4E8B\uFF1A\n\n${lines.join('\n')}`,
+        content: `Niromi \u53EF\u4EE5\u5E2E\u4F60\u505A\u8FD9\u4E9B\u4E8B\uFF1A\n\n${lines.join('\n')}`,
       })
     },
   })
@@ -416,10 +416,10 @@ export function registerBuiltinSkills() {
   // Register configurable skills
   registerWeChatDelegateSkill()
 
-  // Initialize marketplace skills (load from ~/.miru/skills/)
+  // Initialize marketplace skills (load from ~/.niromi/skills/)
   import('./loader').then(({ initMarketplaceSkills }) => {
     initMarketplaceSkills().catch(err => {
-      console.warn('[Miru] Marketplace skills init:', err)
+      console.warn('[Niromi] Marketplace skills init:', err)
     })
   })
 }

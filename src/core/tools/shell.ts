@@ -15,7 +15,7 @@ toolRegistry.register({
   category: 'system',
   execute: async (params) => {
     if (!window.electronAPI) {
-      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+      return { success: false, data: null, summary: 'Niromi 的系统接口还没准备好，请稍后再试' }
     }
     try {
       const command = params.command as string

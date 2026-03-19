@@ -28,7 +28,7 @@ toolRegistry.register({
     const timer = setTimeout(() => {
       // Use Notification API
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        new Notification('Miru 提醒你~', { body: message })
+        new Notification('Niromi 提醒你~', { body: message })
       }
       reminders.delete(id)
     }, minutes * 60 * 1000)

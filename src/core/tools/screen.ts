@@ -11,7 +11,7 @@ toolRegistry.register({
   category: 'screen',
   execute: async () => {
     if (!window.electronAPI) {
-      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+      return { success: false, data: null, summary: 'Niromi 的系统接口还没准备好，请稍后再试' }
     }
     try {
       const win = await window.electronAPI.getActiveWindow()
@@ -34,7 +34,7 @@ toolRegistry.register({
   category: 'screen',
   execute: async () => {
     if (!window.electronAPI) {
-      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+      return { success: false, data: null, summary: 'Niromi 的系统接口还没准备好，请稍后再试' }
     }
     try {
       const procs = await window.electronAPI.getProcessList()
@@ -58,7 +58,7 @@ toolRegistry.register({
   category: 'screen',
   execute: async () => {
     if (!window.electronAPI) {
-      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好' }
+      return { success: false, data: null, summary: 'Niromi 的系统接口还没准备好' }
     }
     const { visionTarget } = useConfigStore.getState()
     if (visionTarget === 'off') {
@@ -98,7 +98,7 @@ toolRegistry.register({
   execute: async (params: Record<string, unknown>) => {
     const windowName = params.window_name as string
     if (!window.electronAPI) {
-      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好' }
+      return { success: false, data: null, summary: 'Niromi 的系统接口还没准备好' }
     }
     if (!isVisionCapable()) {
       return { success: false, data: null, summary: '当前模型不支持视觉，请切换到支持视觉的模型' }
@@ -124,7 +124,7 @@ toolRegistry.register({
   category: 'screen',
   execute: async () => {
     if (!window.electronAPI) {
-      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+      return { success: false, data: null, summary: 'Niromi 的系统接口还没准备好，请稍后再试' }
     }
     try {
       const dataUrl = await window.electronAPI.captureScreenshot()
@@ -154,7 +154,7 @@ toolRegistry.register({
   execute: async (params: Record<string, unknown>) => {
     const windowName = params.window_name as string
     if (!window.electronAPI) {
-      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+      return { success: false, data: null, summary: 'Niromi 的系统接口还没准备好，请稍后再试' }
     }
     try {
       const dataUrl = await window.electronAPI.captureWindow(windowName)

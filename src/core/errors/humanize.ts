@@ -1,6 +1,6 @@
 /**
- * Translate raw technical errors into Miru-voice friendly messages.
- * CLAUDE.md rule: "错误消息翻译为 Miru 的话，永远不显示原始 error"
+ * Translate raw technical errors into Niromi-voice friendly messages.
+ * CLAUDE.md rule: "错误消息翻译为 Niromi 的话，永远不显示原始 error"
  */
 
 type Lang = 'zh' | 'en' | 'auto'
@@ -27,8 +27,8 @@ const patterns: ErrorPattern[] = [
   // Rate limit
   {
     test: (m) => /\b(429|rate.?limit|too many requests|quota)/i.test(m),
-    zh: '调用太频繁了，Miru 休息一下再试~',
-    en: 'Too many requests, Miru will rest a bit~',
+    zh: '调用太频繁了，Niromi 休息一下再试~',
+    en: 'Too many requests, Niromi will rest a bit~',
   },
   // Minimax-specific errors
   {
@@ -45,8 +45,8 @@ const patterns: ErrorPattern[] = [
   // Network / connection
   {
     test: (m) => /\b(fetch failed|failed to fetch|econnrefused|econnreset|enotfound|network|dns|CORS|ssl|ERR_CONNECTION)/i.test(m),
-    zh: 'Miru 连不上网络呢...',
-    en: "Miru can't connect to the network...",
+    zh: 'Niromi 连不上网络呢...',
+    en: "Niromi can't connect to the network...",
   },
   // Timeout
   {
@@ -57,8 +57,8 @@ const patterns: ErrorPattern[] = [
   // File permission
   {
     test: (m) => /\b(eacces|eperm|permission denied|access denied)/i.test(m),
-    zh: 'Miru 没有权限访问这个文件呢...',
-    en: "Miru doesn't have permission for this file...",
+    zh: 'Niromi 没有权限访问这个文件呢...',
+    en: "Niromi doesn't have permission for this file...",
   },
   // File not found
   {
@@ -81,8 +81,8 @@ const patterns: ErrorPattern[] = [
 ]
 
 const fallback = {
-  zh: '呜...出了点小状况，Miru 也不太确定怎么回事',
-  en: "Hmm... something went wrong, Miru isn't sure what happened",
+  zh: '呜...出了点小状况，Niromi 也不太确定怎么回事',
+  en: "Hmm... something went wrong, Niromi isn't sure what happened",
 }
 
 function resolveLang(lang: Lang): 'zh' | 'en' {

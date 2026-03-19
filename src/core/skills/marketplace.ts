@@ -2,7 +2,7 @@ import type { SkillDefinition } from './registry'
 
 // Marketplace skill metadata (extends SkillDefinition)
 export interface MarketplaceSkillMeta {
-  source: 'builtin' | 'openclaw' | 'miru-registry' | 'local'
+  source: 'builtin' | 'openclaw' | 'niromi-registry' | 'local'
   version: string
   author: string
   repoUrl?: string
@@ -24,7 +24,7 @@ export interface MarketplaceIndexEntry {
   descriptionEn?: string
   author: string
   version: string
-  source: 'openclaw' | 'miru-registry'
+  source: 'openclaw' | 'niromi-registry'
   repoUrl: string
   riskLevel: 'low' | 'medium' | 'high'
   tags: string[]

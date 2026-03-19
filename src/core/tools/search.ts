@@ -15,7 +15,7 @@ toolRegistry.register({
   category: 'search',
   execute: async (params) => {
     if (!window.electronAPI) {
-      return { success: false, data: null, summary: 'Miru 的系统接口还没准备好，请稍后再试' }
+      return { success: false, data: null, summary: 'Niromi 的系统接口还没准备好，请稍后再试' }
     }
     const query = String(params.query || '')
     if (!query) {
@@ -43,7 +43,7 @@ toolRegistry.register({
       return {
         success: true,
         data: { query, url: searchUrl, fallback: true },
-        summary: `已在浏览器中打开搜索「${query}」，Miru 没有找到直接的搜索结果`,
+        summary: `已在浏览器中打开搜索「${query}」，Niromi 没有找到直接的搜索结果`,
       }
     } catch (err) {
       // Last resort: open browser

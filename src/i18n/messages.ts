@@ -31,7 +31,7 @@ export const messages: Record<string, Record<string, string>> = {
 
     // Chat
     'chat.placeholder': '说点什么... 输入 / 查看命令',
-    'chat.thinking': 'Miru 正在思考...',
+    'chat.thinking': 'Niromi 正在思考...',
     'chat.stop': '停止生成',
     'chat.stopRecording': '停止录音',
     'chat.voiceInput': '语音输入',
@@ -176,7 +176,7 @@ export const messages: Record<string, Record<string, string>> = {
     'admin.logs.noEntries': '暂无日志',
 
     // Onboarding
-    'welcome.hello': '你好！我是 Miru',
+    'welcome.hello': '你好！我是 Niromi',
     'welcome.intro': '我是你的桌面小伙伴！让我先做个简单的设置~',
     'welcome.start': '开始设置',
     'welcome.selectAI': '选择 AI 服务',
@@ -188,19 +188,19 @@ export const messages: Record<string, Record<string, string>> = {
     'welcome.testing': '测试中...',
     'welcome.test': '连接测试',
     'welcome.back': '返回',
-    'welcome.features': 'Miru 可以做的事',
+    'welcome.features': 'Niromi 可以做的事',
     'welcome.feat.chat': '对话 — 聊天、搜索、写代码、解答问题',
     'welcome.feat.tools': '工具 — 整理文件、打开应用、系统操作',
     'welcome.feat.watch': '值守 — 监控窗口、自动回复消息',
     'welcome.feat.voice': '语音 — 说话输入 (Alt+M)，朗读回复',
     'welcome.featHint': '输入 / 查看更多命令 · 右键开启管理面板',
-    'welcome.begin': '开始使用 Miru',
+    'welcome.begin': '开始使用 Niromi',
     'welcome.done': '设置完成！',
     'welcome.doneDesc': '点击我就可以聊天啦~ 我可以帮你整理文件、打开应用、记住你的习惯！',
 
     // Error Boundary
     'error.title': '哎呀，出了点问题',
-    'error.desc': 'Miru 遇到了一个小故障，请重试一下~',
+    'error.desc': 'Niromi 遇到了一个小故障，请重试一下~',
     'error.retry': '重试',
 
     // Cost
@@ -224,8 +224,8 @@ export const messages: Record<string, Record<string, string>> = {
 
     // Settings - new
     'settings.personality.userName': '你的名字',
-    'settings.personality.userNamePlaceholder': '让 Miru 知道怎么称呼你',
-    'settings.personality.thirdPerson': 'Miru 自称第三人称',
+    'settings.personality.userNamePlaceholder': '让 Niromi 知道怎么称呼你',
+    'settings.personality.thirdPerson': 'Niromi 自称第三人称',
     'settings.ai.test': '测试连接',
     'settings.ai.testing': '测试中...',
     'settings.ai.testOk': '连接成功!',
@@ -268,7 +268,7 @@ export const messages: Record<string, Record<string, string>> = {
     'dialog.cancel': '取消',
 
     // AI
-    'ai.noApiKey': 'Miru 还没有配置 API Key 呢~ 去设置里填一下吧！',
+    'ai.noApiKey': 'Niromi 还没有配置 API Key 呢~ 去设置里填一下吧！',
     'ai.cancelled': '好的，已取消~',
 
     // Skill Config
@@ -327,7 +327,7 @@ export const messages: Record<string, Record<string, string>> = {
 
     // Chat
     'chat.placeholder': 'Say something... Type / for commands',
-    'chat.thinking': 'Miru is thinking...',
+    'chat.thinking': 'Niromi is thinking...',
     'chat.stop': 'Stop generating',
     'chat.stopRecording': 'Stop recording',
     'chat.voiceInput': 'Voice input',
@@ -472,7 +472,7 @@ export const messages: Record<string, Record<string, string>> = {
     'admin.logs.noEntries': 'No log entries',
 
     // Onboarding
-    'welcome.hello': 'Hi! I\'m Miru',
+    'welcome.hello': 'Hi! I\'m Niromi',
     'welcome.intro': 'I\'m your desktop companion! Let\'s do a quick setup~',
     'welcome.start': 'Get Started',
     'welcome.selectAI': 'Choose AI Service',
@@ -484,19 +484,19 @@ export const messages: Record<string, Record<string, string>> = {
     'welcome.testing': 'Testing...',
     'welcome.test': 'Test Connection',
     'welcome.back': 'Back',
-    'welcome.features': 'What Miru can do',
+    'welcome.features': 'What Niromi can do',
     'welcome.feat.chat': 'Chat — conversations, search, code, Q&A',
     'welcome.feat.tools': 'Tools — organize files, open apps, system ops',
     'welcome.feat.watch': 'Watch — monitor windows, auto-reply messages',
     'welcome.feat.voice': 'Voice — speak to input (Alt+M), read replies',
     'welcome.featHint': 'Type / for more commands · Right-click for admin',
-    'welcome.begin': 'Start using Miru',
+    'welcome.begin': 'Start using Niromi',
     'welcome.done': 'Setup Complete!',
     'welcome.doneDesc': 'Click me to chat~ I can organize files, open apps, and remember your habits!',
 
     // Error Boundary
     'error.title': 'Oops, something went wrong',
-    'error.desc': 'Miru hit a little snag. Please try again~',
+    'error.desc': 'Niromi hit a little snag. Please try again~',
     'error.retry': 'Retry',
 
     // Cost
@@ -520,8 +520,8 @@ export const messages: Record<string, Record<string, string>> = {
 
     // Settings - new
     'settings.personality.userName': 'Your Name',
-    'settings.personality.userNamePlaceholder': 'Let Miru know what to call you',
-    'settings.personality.thirdPerson': 'Miru refers to self in third person',
+    'settings.personality.userNamePlaceholder': 'Let Niromi know what to call you',
+    'settings.personality.thirdPerson': 'Niromi refers to self in third person',
     'settings.ai.test': 'Test Connection',
     'settings.ai.testing': 'Testing...',
     'settings.ai.testOk': 'Connected!',
@@ -564,7 +564,7 @@ export const messages: Record<string, Record<string, string>> = {
     'dialog.cancel': 'Cancel',
 
     // AI
-    'ai.noApiKey': 'Miru doesn\'t have an API Key yet~ Go to Settings to add one!',
+    'ai.noApiKey': 'Niromi doesn\'t have an API Key yet~ Go to Settings to add one!',
     'ai.cancelled': 'OK, cancelled~',
 
     // Skill Config

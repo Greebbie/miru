@@ -23,7 +23,7 @@ class JsonStore {
   private filePath: string
   private data: Record<string, unknown> = {}
 
-  constructor(name = 'miru-store') {
+  constructor(name = 'niromi-store') {
     const userDataPath = app.getPath('userData')
     this.filePath = path.join(userDataPath, `${name}.json`)
     try {
@@ -60,9 +60,9 @@ let store: JsonStore
 
 function createWindow() {
   const iconCandidates = [
-    path.join(__dirname, '../src/assets/miru.png'),     // dev
-    path.join(__dirname, '../dist/miru.png'),            // built
-    path.join(process.resourcesPath || '', 'miru.png'),  // packaged
+    path.join(__dirname, '../src/assets/niromi.png'),     // dev
+    path.join(__dirname, '../dist/niromi.png'),            // built
+    path.join(process.resourcesPath || '', 'niromi.png'),  // packaged
   ]
   const iconPath = iconCandidates.find((p) => fs.existsSync(p))
   const iconImage = iconPath ? nativeImage.createFromPath(iconPath) : undefined
@@ -76,7 +76,7 @@ function createWindow() {
     skipTaskbar: false,
     resizable: false,
     hasShadow: false,
-    title: 'Miru',
+    title: 'Niromi',
     icon: iconImage,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -574,7 +574,7 @@ function captureWindowNative(windowName: string, maxW: number, maxH: number): Pr
   return new Promise((resolve, reject) => {
     const sanitized = windowName.replace(/'/g, "''")
     const tempDir = app.getPath('temp')
-    const tempFile = path.join(tempDir, `miru-capture-${Date.now()}.cs`)
+    const tempFile = path.join(tempDir, `niromi-capture-${Date.now()}.cs`)
 
     // Write C# source to temp file to avoid PS here-string issues
     const csSource = [
@@ -702,13 +702,13 @@ ipcMain.handle('stt-switch-model', async (_event, modelId: string) => {
 // ---- Skill Marketplace IPC ----
 
 ipcMain.handle('skill-get-dir', () => {
-  const dir = path.join(os.homedir(), '.miru', 'skills')
+  const dir = path.join(os.homedir(), '.niromi', 'skills')
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
   return dir.replace(/\\/g, '/')
 })
 
 ipcMain.handle('skill-scan-local', () => {
-  const dir = path.join(os.homedir(), '.miru', 'skills')
+  const dir = path.join(os.homedir(), '.niromi', 'skills')
   if (!fs.existsSync(dir)) return []
   const results: { id: string; skillMdContent: string; files: string[] }[] = []
   try {
@@ -728,7 +728,7 @@ ipcMain.handle('skill-scan-local', () => {
 
 ipcMain.handle('skill-install', async (_event, { repoUrl, skillId, files }: { repoUrl: string; skillId: string; files: string[] }) => {
   // Security: validate skillId has no path traversal
-  const skillsRoot = path.resolve(os.homedir(), '.miru', 'skills')
+  const skillsRoot = path.resolve(os.homedir(), '.niromi', 'skills')
   const dir = path.resolve(skillsRoot, skillId)
   if (!dir.startsWith(skillsRoot) || skillId.includes('..')) {
     return { success: false, skillDir: '' }
@@ -777,7 +777,7 @@ ipcMain.handle('skill-install', async (_event, { repoUrl, skillId, files }: { re
 
 ipcMain.handle('skill-uninstall', (_event, skillId: string) => {
   // Security: validate skillId has no path traversal
-  const skillsRoot = path.resolve(os.homedir(), '.miru', 'skills')
+  const skillsRoot = path.resolve(os.homedir(), '.niromi', 'skills')
   const dir = path.resolve(skillsRoot, skillId)
   if (!dir.startsWith(skillsRoot) || skillId.includes('..')) return
   if (fs.existsSync(dir)) {
@@ -789,8 +789,8 @@ ipcMain.handle('skill-exec-script', (_event, { skillDir, interpreter, params }: 
   return new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve) => {
     const dir = normalizePath(skillDir)
 
-    // Security: validate skillDir is inside ~/.miru/skills/
-    const skillsRoot = path.resolve(os.homedir(), '.miru', 'skills')
+    // Security: validate skillDir is inside ~/.niromi/skills/
+    const skillsRoot = path.resolve(os.homedir(), '.niromi', 'skills')
     const resolvedDir = path.resolve(dir)
     if (!resolvedDir.startsWith(skillsRoot)) {
       resolve({ stdout: '', stderr: 'Invalid skill directory', exitCode: 1 })
@@ -807,14 +807,14 @@ ipcMain.handle('skill-exec-script', (_event, { skillDir, interpreter, params }: 
       default: command = 'bash'; args = [path.join(resolvedDir, 'run.sh')]; break
     }
 
-    // Only pass PATH + MIRU_PARAM_* (not full process.env with API keys)
+    // Only pass PATH + NIROMI_PARAM_* (not full process.env with API keys)
     const env: Record<string, string> = {
       PATH: process.env.PATH || '',
       HOME: process.env.HOME || os.homedir(),
       USERPROFILE: process.env.USERPROFILE || os.homedir(),
     }
     for (const [k, v] of Object.entries(params)) {
-      env[`MIRU_PARAM_${k.toUpperCase()}`] = String(v)
+      env[`NIROMI_PARAM_${k.toUpperCase()}`] = String(v)
     }
 
     execFile(command, args, { timeout: 30000, env, cwd: resolvedDir }, (err, stdout, stderr) => {
@@ -853,7 +853,7 @@ function nodeFetch(url: string, options: { method?: string; headers?: Record<str
 const activeStreams = new Map<string, AbortController>()
 
 ipcMain.handle('proxy-fetch', async (_event, url: string, options: { method?: string; headers?: Record<string, string>; body?: string }) => {
-  console.log('[Miru] proxy-fetch →', options.method || 'POST', url)
+  console.log('[Niromi] proxy-fetch →', options.method || 'POST', url)
 
   // Try electron.net.fetch first, fallback to Node.js https on failure
   try {
@@ -867,20 +867,20 @@ ipcMain.handle('proxy-fetch', async (_event, url: string, options: { method?: st
         signal: controller.signal,
       })
       const body = await res.text()
-      console.log('[Miru] proxy-fetch ←', res.status, body.slice(0, 200))
+      console.log('[Niromi] proxy-fetch ←', res.status, body.slice(0, 200))
       return { status: res.status, body }
     } finally {
       clearTimeout(timeout)
     }
   } catch (netErr) {
-    console.warn('[Miru] net.fetch failed, trying Node.js https fallback:', (netErr as Error).message)
+    console.warn('[Niromi] net.fetch failed, trying Node.js https fallback:', (netErr as Error).message)
     try {
       const result = await nodeFetch(url, options)
-      console.log('[Miru] proxy-fetch (node) ←', result.status, result.body.slice(0, 200))
+      console.log('[Niromi] proxy-fetch (node) ←', result.status, result.body.slice(0, 200))
       return result
     } catch (nodeErr) {
       const msg = (nodeErr as Error).message || String(nodeErr)
-      console.error('[Miru] proxy-fetch both paths failed:', msg)
+      console.error('[Niromi] proxy-fetch both paths failed:', msg)
       throw new Error(msg)
     }
   }
@@ -939,7 +939,7 @@ ipcMain.handle('proxy-stream', async (event, url: string, options: { method?: st
 
     return { streamId }
   } catch (netErr) {
-    console.warn('[Miru] proxy-stream net.fetch failed, trying Node.js fallback:', (netErr as Error).message)
+    console.warn('[Niromi] proxy-stream net.fetch failed, trying Node.js fallback:', (netErr as Error).message)
     useNodeFallback = true
   }
 
@@ -1036,11 +1036,11 @@ function createTray() {
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAARklEQVQ4T2NkYPj/n4EBCBgZGRkYQWwUwAgyAcYGsUEmMDAyMDKiGIJsCLIJyIagGILNBSBD0F2A4gIMA3C5AG4AslcBAACX6B0RqiMtGAAAAABJRU5ErkJggg=='
   )
   tray = new Tray(icon)
-  tray.setToolTip('Miru')
+  tray.setToolTip('Niromi')
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: '显示 Miru',
+      label: '显示 Niromi',
       click: () => {
         mainWindow?.show()
         mainWindow?.focus()
@@ -1079,7 +1079,7 @@ app.whenReady().then(async () => {
   // Inherit system proxy from env (e.g. http_proxy / https_proxy)
   const proxyUrl = process.env.https_proxy || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.HTTP_PROXY
   if (proxyUrl) {
-    console.log('[Miru] Setting proxy:', proxyUrl)
+    console.log('[Niromi] Setting proxy:', proxyUrl)
     // Electron setProxy needs proxyRules in Chromium format: "http://host:port"
     // Also set proxyBypassRules for localhost
     const { session } = await import('electron')
@@ -1088,7 +1088,7 @@ app.whenReady().then(async () => {
       proxyBypassRules: 'localhost,127.0.0.1',
     })
     const resolved = await session.defaultSession.resolveProxy('https://api.minimax.chat')
-    console.log('[Miru] Proxy resolved for minimax:', resolved)
+    console.log('[Niromi] Proxy resolved for minimax:', resolved)
   }
 
   store = new JsonStore()
@@ -1102,11 +1102,11 @@ app.whenReady().then(async () => {
   // Setup memory DB (may fail if better-sqlite3 native module not rebuilt for Electron)
   if (setupMemoryDb) {
     try {
-      const dbPath = path.join(app.getPath('userData'), 'miru-memory.db')
+      const dbPath = path.join(app.getPath('userData'), 'niromi-memory.db')
       setupMemoryDb(dbPath)
     } catch (err) {
-      console.error('[Miru] Memory DB init failed (better-sqlite3 may need rebuild):', (err as Error).message)
-      console.error('[Miru] Run: npx electron-rebuild -f -w better-sqlite3')
+      console.error('[Niromi] Memory DB init failed (better-sqlite3 may need rebuild):', (err as Error).message)
+      console.error('[Niromi] Run: npx electron-rebuild -f -w better-sqlite3')
     }
   }
 
