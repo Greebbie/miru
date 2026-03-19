@@ -2,7 +2,7 @@
 
 <img src="niromi.png" width="120" />
 
-# Niromi (みる)
+# Niromi
 
 **Your AI Desktop Companion**
 
