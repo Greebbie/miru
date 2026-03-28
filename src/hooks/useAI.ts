@@ -18,8 +18,8 @@ import { humanizeError } from '@/core/errors/humanize'
 import { describeToolAction } from '@/core/tools/describe'
 import { playSound } from '@/core/sound'
 import { messages } from '@/i18n/messages'
-
-const MAX_TOOL_ROUNDS = 5
+import { useFeedbackStore } from '@/stores/feedbackStore'
+import { MAX_TOOL_ROUNDS } from '@/core/constants'
 
 /** Get a translated string using current language setting */
 function msg(key: string): string {
@@ -91,6 +91,11 @@ export function useAI() {
           content: localMatch.directResponse,
         })
         charStore.setEmotions({ joy: 0.5 })
+        useFeedbackStore.getState().addToast({
+          icon: '\u26A1',
+          message: localMatch.directResponse.slice(0, 40),
+          type: 'info',
+        })
         return
       }
 
@@ -183,7 +188,7 @@ export function useAI() {
             const imageUrl = (result.data as Record<string, unknown>)?._image as string | undefined
             if (imageUrl && result.success) {
               // Screenshot captured locally (zero tokens). Now send to AI for description.
-              const provider = createProvider()
+              const provider = createProvider('vision')
               if (!provider) {
                 chatStore.addMessage({ role: 'assistant', content: msg('ai.noApiKey') })
                 charStore.setEmotions({ concern: 0.4 })
@@ -265,7 +270,7 @@ export function useAI() {
     }
 
     // Step 2: Fall through to AI
-    const provider = createProvider()
+    const provider = createProvider('chat')
     if (!provider) {
       chatStore.addMessage({
         role: 'assistant',

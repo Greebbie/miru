@@ -6,7 +6,7 @@ import { humanizeError } from '@/core/errors/humanize'
 import { testConnection } from '@/core/ai/testConnection'
 import { useI18n } from '@/i18n/useI18n'
 
-const STEPS = ['intro', 'provider', 'apikey', 'features', 'done'] as const
+const STEPS = ['intro', 'provider', 'apikey', 'features', 'scenarios', 'done'] as const
 type Step = typeof STEPS[number]
 
 interface ProviderInfo {
@@ -226,6 +226,35 @@ export default function Welcome() {
                 <p className="text-white/70"><span className="text-white/40 mr-2">{'\uD83C\uDFA4'}</span>{t('welcome.feat.voice')}</p>
               </div>
               <p className="text-white/30 text-xs mb-4 text-center">{t('welcome.featHint')}</p>
+              <button onClick={() => setStep('scenarios')} className="btn-primary w-full">
+                {t('welcome.next')}
+              </button>
+            </StepContainer>
+          )}
+
+          {step === 'scenarios' && (
+            <StepContainer key="scenarios">
+              <h2 className="text-white text-base font-bold mb-3">{t('welcome.scenarios')}</h2>
+              <div className="space-y-2 mb-4">
+                {[
+                  { icon: '\uD83D\uDCAC', label: t('qa.watchWeChat'), desc: t('qa.watchWeChatDesc') },
+                  { icon: '\uD83D\uDC41\uFE0F', label: t('qa.watchWindow'), desc: t('qa.watchWindowDesc') },
+                  { icon: '\u26A1', label: t('qa.quickCommand'), desc: t('qa.quickCommandDesc') },
+                  { icon: '\uD83E\uDDE9', label: t('qa.manageSkills'), desc: t('qa.manageSkillsDesc') },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5 border border-white/8"
+                  >
+                    <span className="text-lg">{s.icon}</span>
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-white/85">{s.label}</div>
+                      <div className="text-[10px] text-white/45 truncate">{s.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-white/30 text-xs mb-3 text-center">{t('welcome.scenariosHint')}</p>
               <button onClick={() => setStep('done')} className="btn-primary w-full">
                 {t('welcome.begin')} {'\u2728'}
               </button>

@@ -1,5 +1,6 @@
 import { startTransition } from 'react'
 import { create } from 'zustand'
+import { CHAT_PERSIST_DEBOUNCE_MS, MAX_PERSISTED_MESSAGES } from '@/core/constants'
 
 export interface Message {
   id: string
@@ -52,8 +53,6 @@ interface ChatState {
 let msgCounter = 0
 const genId = () => `msg-${Date.now()}-${++msgCounter}`
 
-const MAX_PERSISTED_MESSAGES = 50
-
 let persistTimer: ReturnType<typeof setTimeout> | null = null
 
 function persistMessages(messages: Message[], immediate = false) {
@@ -75,7 +74,7 @@ function persistMessages(messages: Message[], immediate = false) {
   } else {
     // Debounce: wait 500ms before writing to disk
     if (persistTimer !== null) clearTimeout(persistTimer)
-    persistTimer = setTimeout(doSave, 500)
+    persistTimer = setTimeout(doSave, CHAT_PERSIST_DEBOUNCE_MS)
   }
 }
 
@@ -111,9 +110,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const last = { ...msgs[msgs.length - 1] }
       last.content += text
       msgs[msgs.length - 1] = last
+      // Debounced persist during streaming (saves every 2s, not on every chunk)
+      persistMessages(msgs)
       return { messages: msgs }
     })
-    // Persist less frequently for streaming — debounced by caller or on done
   },
 
   updateMessage: (id, update) => {

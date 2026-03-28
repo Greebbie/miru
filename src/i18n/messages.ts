@@ -246,6 +246,8 @@ export const messages: Record<string, Record<string, string>> = {
     'welcome.example.abilities': '你能做什么？',
     'welcome.example.hello': '你好，我叫...',
     'welcome.skip': '跳过',
+    'welcome.scenarios': 'Niromi 的看家本领',
+    'welcome.scenariosHint': '这些功能可以在右键菜单的"快捷操作"中随时开启',
 
     // Monitor
     'monitor.visionStarted': '视觉监控已启动',
@@ -294,6 +296,35 @@ export const messages: Record<string, Record<string, string>> = {
 
     // Slash Menu
     'slash.noMatch': '没有匹配的命令',
+
+    // Quick Actions
+    'qa.title': '快捷操作',
+    'qa.watchWeChat': '帮我盯微信',
+    'qa.watchWeChatDesc': '有新消息时自动回复，敏感内容会屏蔽',
+    'qa.watchWindow': '看守任务',
+    'qa.watchWindowDesc': '监控任意窗口，检测变化后通知或操作',
+    'qa.manageSkills': '技能管理',
+    'qa.manageSkillsDesc': '安装和管理扩展技能',
+    'qa.quickCommand': '快速命令',
+    'qa.quickCommandDesc': '打开应用、网站、系统操作',
+    'qa.active': '运行中',
+    'qa.inactive': '未启用',
+    'qa.presetClaudeCode': '盯 Claude Code',
+    'qa.presetWebWatch': '盯网页变化',
+    'qa.presetBuildWatch': '盯编译/下载',
+    'qa.presetCustom': '自定义看守',
+
+    // Feedback
+    'feedback.toolSuccess': '已完成',
+    'feedback.toolError': '执行失败',
+
+    // Model Routing
+    'settings.ai.routing': '任务路由',
+    'settings.ai.routing.inherit': '跟随主配置',
+    'settings.ai.task.chat': '对话',
+    'settings.ai.task.vision': '视觉',
+    'settings.ai.task.monitoring': '监控',
+    'settings.ai.task.factExtraction': '记忆',
   },
   en: {
     // App
@@ -542,6 +573,8 @@ export const messages: Record<string, Record<string, string>> = {
     'welcome.example.abilities': 'What can you do?',
     'welcome.example.hello': 'Hi, my name is...',
     'welcome.skip': 'Skip',
+    'welcome.scenarios': 'Niromi\'s superpowers',
+    'welcome.scenariosHint': 'Enable these anytime from right-click > Quick Actions',
 
     // Monitor
     'monitor.visionStarted': 'Vision monitor started.',
@@ -590,5 +623,34 @@ export const messages: Record<string, Record<string, string>> = {
 
     // Slash Menu
     'slash.noMatch': 'No matching commands',
+
+    // Quick Actions
+    'qa.title': 'Quick Actions',
+    'qa.watchWeChat': 'Watch WeChat',
+    'qa.watchWeChatDesc': 'Auto-reply to messages, blocks sensitive content',
+    'qa.watchWindow': 'Watch Task',
+    'qa.watchWindowDesc': 'Monitor any window, notify or act on changes',
+    'qa.manageSkills': 'Manage Skills',
+    'qa.manageSkillsDesc': 'Install and manage extension skills',
+    'qa.quickCommand': 'Quick Command',
+    'qa.quickCommandDesc': 'Open apps, websites, system operations',
+    'qa.active': 'Active',
+    'qa.inactive': 'Inactive',
+    'qa.presetClaudeCode': 'Watch Claude Code',
+    'qa.presetWebWatch': 'Watch Web Page',
+    'qa.presetBuildWatch': 'Watch Build/Download',
+    'qa.presetCustom': 'Custom Watch',
+
+    // Feedback
+    'feedback.toolSuccess': 'Done',
+    'feedback.toolError': 'Failed',
+
+    // Model Routing
+    'settings.ai.routing': 'Task Routing',
+    'settings.ai.routing.inherit': 'Follow main config',
+    'settings.ai.task.chat': 'Chat',
+    'settings.ai.task.vision': 'Vision',
+    'settings.ai.task.monitoring': 'Monitor',
+    'settings.ai.task.factExtraction': 'Memory',
   },
 }

@@ -10,6 +10,18 @@ interface ToolPermission {
   callCount: number
 }
 
+/** Conditions for content-based matching — evaluated against extracted text */
+interface MonitorConditions {
+  /** Text must contain all of these keywords */
+  contains?: string[]
+  /** Text must NOT contain any of these keywords */
+  notContains?: string[]
+  /** Text must match this regex */
+  matchPattern?: string
+  /** Detect state transitions */
+  stateChange?: 'idle_to_active' | 'active_to_idle' | 'error_detected'
+}
+
 interface MonitorRule {
   id: string
   name: string
@@ -20,13 +32,19 @@ interface MonitorRule {
     app?: string
     visionIntervalMs?: number
   }
+  /** Optional conditions for richer "see X → do Y" logic */
+  conditions?: MonitorConditions
+  /** Custom extraction prompt (advanced mode, overrides auto-detected strategy) */
+  customExtractionPrompt?: string
   action: {
-    type: 'notify' | 'auto_reply' | 'run_tool' | 'run_skill' | 'send_keys_to_app'
+    type: 'notify' | 'auto_reply' | 'run_tool' | 'run_skill' | 'send_keys_to_app' | 'copy_content' | 'run_command' | 'chain_next'
     payload: string
     params?: Record<string, unknown>
   }
   cooldownMs: number
   lastTriggered?: number
+  /** Preset origin (e.g. 'claude_code', 'web_watch') */
+  presetId?: string
 }
 
 interface AutoReplyRule {
@@ -106,8 +124,9 @@ interface AdminState {
   clearDelegationLog: () => void
 }
 
+let idCounter = 0
 function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+  return Date.now().toString(36) + '-' + (++idCounter).toString(36) + Math.random().toString(36).slice(2, 6)
 }
 
 function persistConfig(state: AdminState) {

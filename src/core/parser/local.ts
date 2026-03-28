@@ -42,6 +42,10 @@ const KNOWN_APPS = new Set([
   'calculator', '计算器', 'explorer', '文件管理器', 'finder',
   'settings', '设置', 'control panel', '控制面板',
   'task manager', '任务管理器', 'snipping tool', '截图工具',
+  // Productivity
+  'notion', 'obsidian', 'typora', 'postman', 'docker', 'vmware',
+  // Chinese apps
+  '剪映', 'capcut', '腾讯会议', 'tencent meeting',
   // Games & others
   'steam', 'epic', 'obs', 'photoshop', 'figma', 'blender',
 ])
@@ -78,6 +82,20 @@ const KNOWN_WEBSITES: Record<string, string> = {
   'gmail': 'https://mail.google.com',
   'notion': 'https://www.notion.so',
   'figma': 'https://www.figma.com',
+  'douban': 'https://www.douban.com',
+  '豆瓣': 'https://www.douban.com',
+  'meituan': 'https://www.meituan.com',
+  '美团': 'https://www.meituan.com',
+  'ctrip': 'https://www.ctrip.com',
+  '携程': 'https://www.ctrip.com',
+  '163': 'https://mail.163.com',
+  '网易邮箱': 'https://mail.163.com',
+  'leetcode': 'https://leetcode.cn',
+  'stackoverflow': 'https://stackoverflow.com',
+  'bing': 'https://www.bing.com',
+  '必应': 'https://www.bing.com',
+  'deepseek': 'https://chat.deepseek.com',
+  'kaggle': 'https://www.kaggle.com',
 }
 
 function isKnownApp(name: string): boolean {
@@ -298,6 +316,99 @@ const patterns: Pattern[] = [
     extract: (m) => ({ query: m[1].trim() }),
   },
 
+  // --- System control patterns ---
+
+  // Volume control — Chinese
+  {
+    regex: /^(?:静音|mute|取消静音|unmute)$/i,
+    tool: 'run_shell',
+    extract: (m) => {
+      const isMute = /静音|mute/i.test(m[0])
+      return {
+        command: process.platform === 'win32'
+          ? `powershell -c "(New-Object -ComObject WScript.Shell).SendKeys([char]173)"`
+          : `osascript -e "set volume with output muted"`,
+      }
+    },
+    direct: (m) => /静音|^mute$/i.test(m[0]) ? '已静音' : '已取消静音',
+  },
+  {
+    regex: /^(?:调高音量|音量加|volume up|louder)$/i,
+    tool: 'run_shell',
+    extract: () => ({
+      command: process.platform === 'win32'
+        ? `powershell -c "(New-Object -ComObject WScript.Shell).SendKeys([char]175)"`
+        : `osascript -e "set volume output volume ((output volume of (get volume settings)) + 10)"`,
+    }),
+    direct: () => '已调高音量',
+  },
+  {
+    regex: /^(?:调低音量|音量减|volume down|quieter)$/i,
+    tool: 'run_shell',
+    extract: () => ({
+      command: process.platform === 'win32'
+        ? `powershell -c "(New-Object -ComObject WScript.Shell).SendKeys([char]174)"`
+        : `osascript -e "set volume output volume ((output volume of (get volume settings)) - 10)"`,
+    }),
+    direct: () => '已调低音量',
+  },
+  // Lock screen
+  {
+    regex: /^(?:锁屏|锁定屏幕|lock screen|lock)$/i,
+    tool: 'run_shell',
+    extract: () => ({
+      command: process.platform === 'win32'
+        ? 'rundll32.exe user32.dll,LockWorkStation'
+        : 'pmset displaysleepnow',
+    }),
+    direct: () => '正在锁屏...',
+  },
+  // Shutdown / restart (high-risk, will be caught by confirmation flow)
+  {
+    regex: /^(?:关机|shutdown|shut down)$/i,
+    tool: 'run_shell',
+    extract: () => ({
+      command: process.platform === 'win32' ? 'shutdown /s /t 60' : 'sudo shutdown -h +1',
+    }),
+    direct: () => '将在 60 秒后关机（可用 shutdown /a 取消）',
+  },
+  {
+    regex: /^(?:重启|restart|reboot)$/i,
+    tool: 'run_shell',
+    extract: () => ({
+      command: process.platform === 'win32' ? 'shutdown /r /t 60' : 'sudo shutdown -r +1',
+    }),
+    direct: () => '将在 60 秒后重启（可用 shutdown /a 取消）',
+  },
+  // Minimize current window
+  {
+    regex: /^(?:最小化|minimize)$/i,
+    extract: () => ({}),
+    direct: () => {
+      window.electronAPI?.minimizeWindow()
+      return '已最小化'
+    },
+  },
+  // Calculator — safe arithmetic only
+  {
+    regex: /^(?:计算|算一下|calc(?:ulate)?)\s*(.+)$/i,
+    extract: (m) => ({ expression: m[1].trim() }),
+    direct: (m) => {
+      const expr = m[1].trim()
+      // Only allow digits, operators, parentheses, decimal points, spaces
+      if (!/^[\d+\-*/().%\s]+$/.test(expr)) return '只支持数字计算哦~'
+      try {
+        // Safe eval: only arithmetic characters
+        const result = new Function(`"use strict"; return (${expr})`)()
+        return typeof result === 'number' && isFinite(result)
+          ? `${expr} = ${result}`
+          : '计算出错了~'
+      } catch {
+        return '表达式有误~'
+      }
+    },
+  },
+
   // --- Screen & Process patterns ---
 
   // Active window
@@ -489,6 +600,60 @@ const patterns: Pattern[] = [
   },
 ]
 
+/** Levenshtein edit distance — zero-token fuzzy matching */
+function editDistance(a: string, b: string): number {
+  const la = a.length
+  const lb = b.length
+  const dp: number[] = Array.from({ length: lb + 1 }, (_, i) => i)
+
+  for (let i = 1; i <= la; i++) {
+    let prev = dp[0]
+    dp[0] = i
+    for (let j = 1; j <= lb; j++) {
+      const temp = dp[j]
+      dp[j] = a[i - 1] === b[j - 1]
+        ? prev
+        : 1 + Math.min(prev, dp[j], dp[j - 1])
+      prev = temp
+    }
+  }
+  return dp[lb]
+}
+
+/** Find closest matching known app (edit distance ≤ 2) */
+function fuzzyMatchApp(input: string): string | null {
+  const lower = input.toLowerCase().trim()
+  if (lower.length < 2) return null
+
+  let bestMatch: string | null = null
+  let bestDist = 3 // threshold: max distance 2
+  for (const app of KNOWN_APPS) {
+    const dist = editDistance(lower, app)
+    if (dist < bestDist) {
+      bestDist = dist
+      bestMatch = app
+    }
+  }
+  return bestMatch
+}
+
+/** Find closest matching known website (edit distance ≤ 2) */
+function fuzzyMatchWebsite(input: string): { name: string; url: string } | null {
+  const lower = input.toLowerCase().trim()
+  if (lower.length < 3) return null
+
+  let bestMatch: string | null = null
+  let bestDist = 3
+  for (const name of Object.keys(KNOWN_WEBSITES)) {
+    const dist = editDistance(lower, name)
+    if (dist < bestDist) {
+      bestDist = dist
+      bestMatch = name
+    }
+  }
+  return bestMatch ? { name: bestMatch, url: KNOWN_WEBSITES[bestMatch] } : null
+}
+
 /**
  * Try to match user input against local patterns.
  * Returns a match if found, null if the message should go to AI.
@@ -517,6 +682,35 @@ export function parseLocal(input: string): LocalMatch | null {
         skill: pattern.skill,
         params: pattern.extract(match),
       }
+    }
+  }
+
+  // Fuzzy fallback: try to match "open X" patterns with typo tolerance
+  const openMatch = stripped.match(/^(?:打开|启动|open|launch|start)\s+(.+)$/i)
+    || trimmed.match(/^(?:打开|启动|open|launch|start)\s+(.+)$/i)
+  if (openMatch) {
+    const target = openMatch[1].trim()
+
+    // Fuzzy match known website
+    const website = fuzzyMatchWebsite(target)
+    if (website) {
+      return { tool: 'open_app', params: { name: website.url } }
+    }
+
+    // Fuzzy match known app
+    const app = fuzzyMatchApp(target)
+    if (app) {
+      return { tool: 'open_app', params: { name: app } }
+    }
+  }
+
+  // Fuzzy fallback for "go to X" patterns → website
+  const goMatch = stripped.match(/^(?:去|go to|visit)\s+(.+)$/i)
+    || trimmed.match(/^(?:去|go to|visit)\s+(.+)$/i)
+  if (goMatch) {
+    const website = fuzzyMatchWebsite(goMatch[1].trim())
+    if (website) {
+      return { tool: 'open_app', params: { name: website.url } }
     }
   }
 

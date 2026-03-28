@@ -29,8 +29,8 @@ vi.mock('@/i18n/useI18n', () => ({
   t: (key: string) => key,
 }))
 
-/** Polling interval used by all test rules (must be >= 5000, the module floor) */
-const POLL_MS = 10_000
+/** Polling interval used by all test rules (must be >= 60000, the module floor) */
+const POLL_MS = 60_000
 
 function makeMonitorRule(overrides?: {
   id?: string
@@ -201,7 +201,7 @@ describe('useVisionMonitor', () => {
     it('a rule that just fired should not fire again within cooldown', async () => {
       useAdminStore.setState({
         monitorRules: [makeMonitorRule({
-          cooldownMs: 60000,
+          cooldownMs: 180000, // 3 minutes cooldown (longer than poll interval)
           trigger: { pattern: '.*' },
         })],
       })
@@ -223,14 +223,12 @@ describe('useVisionMonitor', () => {
       const messagesAfterSecond = useChatStore.getState().messages.filter(m => m.content.includes('Detected:'))
       expect(messagesAfterSecond).toHaveLength(1) // still 1, cooldown not expired
 
-      // Advance past cooldown
-      await advanceAndFlush(50000)
-
-      // Now past cooldown, next poll triggers again
+      // Advance past cooldown (180s total needed, already did 2*60=120, need 60 more + 1 poll)
+      await advanceAndFlush(POLL_MS)
       await advanceAndFlush(POLL_MS)
 
       const messagesAfterCooldown = useChatStore.getState().messages.filter(m => m.content.includes('Detected:'))
-      expect(messagesAfterCooldown).toHaveLength(2) // fires again
+      expect(messagesAfterCooldown).toHaveLength(2) // fires again after cooldown
     })
   })
 

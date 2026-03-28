@@ -8,14 +8,48 @@
  * This is a pure module (not a React hook). Call start/stop from useMonitor.
  */
 
+import { VISION_LLM_TIMEOUT_MS, VISION_POLL_DEFAULT_MS, VISION_POLL_MIN_MS } from '@/core/constants'
 import { useAdminStore } from '@/stores/adminStore'
 import { useChatStore } from '@/stores/chatStore'
+import { useCharacterStore } from '@/stores/characterStore'
 import { useConfigStore } from '@/stores/configStore'
 import { toolRegistry } from '@/core/tools'
 import { skillRegistry } from '@/core/skills/registry'
 import { executeSkill } from '@/core/skills/executor'
 import { createProvider, isVisionCapable } from '@/core/ai/createProvider'
+import { useFeedbackStore } from '@/stores/feedbackStore'
+import { useCommandQueueStore } from '@/stores/commandQueueStore'
 import { t } from '@/i18n/useI18n'
+
+/** Extraction strategy determines how screenshot content is analyzed */
+export type ExtractionStrategy = 'chat' | 'terminal' | 'generic'
+
+/** Detect the best extraction strategy based on window/app name */
+function detectStrategy(windowName: string): ExtractionStrategy {
+  const lower = windowName.toLowerCase()
+  // Chat apps
+  if (/wechat|微信|discord|telegram|slack|teams|dingtalk|钉钉|feishu|飞书/.test(lower)) {
+    return 'chat'
+  }
+  // Terminal apps
+  if (/cmd|powershell|terminal|iterm|warp|git bash|windowsterminal|mintty|conemu/.test(lower)) {
+    return 'terminal'
+  }
+  return 'generic'
+}
+
+/** Get the LLM prompt for a given extraction strategy */
+function getStrategyPrompt(strategy: ExtractionStrategy): string {
+  switch (strategy) {
+    case 'chat':
+      return '这是一个聊天窗口截图。提取最新消息的发送者和内容。如果有未读标记（红点）说明是新消息。返回JSON格式: {"messages": [{"sender": "名字", "content": "消息内容", "isNew": true/false}]}'
+    case 'terminal':
+      return '这是一个终端窗口截图。提取最后几行输出，判断状态。返回JSON格式: {"lastLines": "最后几行输出", "status": "running|completed|error|waiting_input", "errorMessage": "如果有错误的话"}'
+    case 'generic':
+    default:
+      return '简要描述屏幕上的内容变化，只输出关键信息，不超过100字。'
+  }
+}
 
 let intervalId: ReturnType<typeof setInterval> | null = null
 const lastScreenshots = new Map<string, string>()
@@ -32,7 +66,7 @@ export function startVisionMonitor(): void {
 
   // Determine minimum interval from all content_change rules
   const minInterval = getMinInterval()
-  const pollMs = Math.max(minInterval, 5000) // floor at 5s
+  const pollMs = Math.max(minInterval, VISION_POLL_MIN_MS)
 
   const chatStore = useChatStore.getState()
   chatStore.addMessage({
@@ -41,6 +75,9 @@ export function startVisionMonitor(): void {
   })
 
   intervalId = setInterval(pollVision, pollMs)
+
+  // Set character to monitoring state
+  useCharacterStore.getState().setEmotions({ focus: 0.6 })
 }
 
 export function stopVisionMonitor(): void {
@@ -58,17 +95,17 @@ export function stopVisionMonitor(): void {
 function getMinInterval(): number {
   const { monitorRules, autoReplyRules } = useAdminStore.getState()
 
-  let min = 10000
+  let min = VISION_POLL_DEFAULT_MS
   for (const rule of monitorRules) {
     if (rule.enabled && rule.trigger.type === 'content_change') {
-      const iv = rule.trigger.visionIntervalMs ?? 10000
+      const iv = rule.trigger.visionIntervalMs ?? VISION_POLL_DEFAULT_MS
       if (iv < min) min = iv
     }
   }
   // AutoReply rules with triggerKeywords also need vision polling
   for (const rule of autoReplyRules) {
     if (rule.enabled && rule.triggerKeywords?.length) {
-      min = Math.min(min, 10000)
+      min = Math.min(min, VISION_POLL_DEFAULT_MS)
     }
   }
   return min
@@ -127,39 +164,30 @@ async function pollVision() {
       const needsContentAnalysis = rules.some(r => r.trigger.pattern !== '.*') ||
         keywordAutoReplies.some(r => (r.app || '__fullscreen__') === windowName)
 
-      if (needsContentAnalysis && isVisionCapable()) {
-        // Send screenshot to LLM for description
-        contentDescription = await describeScreenshotViaLLM(screenshot)
-      } else if (needsContentAnalysis) {
-        // Fallback: use window title for keyword matching (Layer 0)
-        try {
-          const win = await window.electronAPI.getActiveWindow()
-          contentDescription = `${win.app} - ${win.title}`
-        } catch {
-          contentDescription = ''
-        }
+      if (needsContentAnalysis) {
+        // Layered extraction: OCR first (zero token) → LLM Vision fallback
+        contentDescription = await extractInfo(screenshot, windowName)
       }
 
       // Check content_change monitor rules
       for (const rule of rules) {
         if (!checkCooldown(rule.id, rule.cooldownMs)) continue
 
-        // Pattern '.*' matches any change (no need for content analysis)
-        if (rule.trigger.pattern === '.*') {
-          ruleCooldowns.set(rule.id, Date.now())
-          updateMonitorRule(rule.id, { lastTriggered: Date.now() })
-          await executeVisionAction(rule.action, { app: windowName, title: '' })
-          continue
+        // Evaluate conditions if present
+        if (rule.conditions) {
+          if (!contentDescription && needsContentAnalysis) continue
+          if (!evaluateConditions(contentDescription, rule.conditions)) continue
+        } else if (rule.trigger.pattern !== '.*') {
+          // Legacy pattern matching
+          if (!contentDescription) continue
+          try {
+            const matched = new RegExp(rule.trigger.pattern, 'i').test(contentDescription)
+            if (!matched) continue
+          } catch {
+            if (!contentDescription.toLowerCase().includes(rule.trigger.pattern.toLowerCase())) continue
+          }
         }
-
-        if (!contentDescription) continue
-
-        try {
-          const matched = new RegExp(rule.trigger.pattern, 'i').test(contentDescription)
-          if (!matched) continue
-        } catch {
-          if (!contentDescription.toLowerCase().includes(rule.trigger.pattern.toLowerCase())) continue
-        }
+        // If pattern is '.*' and no conditions, any change triggers
 
         ruleCooldowns.set(rule.id, Date.now())
         updateMonitorRule(rule.id, { lastTriggered: Date.now() })
@@ -241,25 +269,94 @@ async function pollVision() {
   }
 }
 
-async function describeScreenshotViaLLM(screenshotDataUrl: string): Promise<string> {
+/**
+ * Extract content from screenshot using layered approach:
+ * 1. Try OCR first (zero LLM cost)
+ * 2. Fall back to LLM Vision if OCR fails or is insufficient
+ */
+async function extractInfo(
+  screenshotDataUrl: string,
+  windowName: string,
+  customPrompt?: string
+): Promise<string> {
+  // Layer 1: Try OCR first (zero token cost)
   try {
-    const provider = createProvider()
+    if (window.electronAPI?.ocrImage) {
+      const ocrText = await window.electronAPI.ocrImage(screenshotDataUrl)
+      if (ocrText && ocrText.length > 10) {
+        return ocrText
+      }
+    }
+  } catch {
+    // OCR failed, fall back to LLM
+  }
+
+  // Layer 2: LLM Vision (with 15s timeout to prevent stalling)
+  try {
+    const provider = createProvider('vision')
     if (!provider) return ''
 
+    const strategy = detectStrategy(windowName)
+    const prompt = customPrompt || getStrategyPrompt(strategy)
+
     let description = ''
-    for await (const chunk of provider.streamChat([
-      { role: 'system', content: '简要描述屏幕上的内容变化，只输出关键信息，不超过100字。' },
-      { role: 'user', content: [
-        { type: 'image', source: screenshotDataUrl },
-        { type: 'text', text: '描述屏幕内容' },
-      ] as any },
-    ])) {
-      if (chunk.type === 'text') description += chunk.text
-    }
+    const streamPromise = (async () => {
+      for await (const chunk of provider.streamChat([
+        { role: 'system', content: prompt },
+        { role: 'user', content: [
+          { type: 'image', source: screenshotDataUrl },
+          { type: 'text', text: '分析内容' },
+        ] as any },
+      ])) {
+        if (chunk.type === 'text') description += chunk.text
+      }
+    })()
+
+    await Promise.race([
+      streamPromise,
+      new Promise<void>((_, reject) => setTimeout(() => reject(new Error('LLM timeout')), VISION_LLM_TIMEOUT_MS)),
+    ])
     return description
   } catch {
     return ''
   }
+}
+
+/** Evaluate conditions against extracted content text */
+function evaluateConditions(
+  text: string,
+  conditions: { contains?: string[]; notContains?: string[]; matchPattern?: string; stateChange?: string }
+): boolean {
+  const lower = text.toLowerCase()
+
+  // contains: text must include at least one keyword
+  if (conditions.contains?.length) {
+    const hasAny = conditions.contains.some((kw) => lower.includes(kw.toLowerCase()))
+    if (!hasAny) return false
+  }
+
+  // notContains: text must NOT include any of these
+  if (conditions.notContains?.length) {
+    const hasAny = conditions.notContains.some((kw) => lower.includes(kw.toLowerCase()))
+    if (hasAny) return false
+  }
+
+  // matchPattern: regex match
+  if (conditions.matchPattern) {
+    try {
+      if (!new RegExp(conditions.matchPattern, 'i').test(text)) return false
+    } catch {
+      if (!lower.includes(conditions.matchPattern.toLowerCase())) return false
+    }
+  }
+
+  // stateChange: detect specific state transitions
+  if (conditions.stateChange === 'error_detected') {
+    const errorPatterns = /error|failed|exception|panic|stack trace|traceback/i
+    if (!errorPatterns.test(text)) return false
+  }
+
+  return true
 }
 
 function checkCooldown(id: string, cooldownMs: number): boolean {
@@ -275,13 +372,16 @@ async function executeVisionAction(
   const chatStore = useChatStore.getState()
 
   switch (action.type) {
-    case 'notify':
-      chatStore.addMessage({
-        role: 'assistant',
-        content: action.payload.replace('{app}', data.app).replace('{title}', data.title),
-      })
+    case 'notify': {
+      const notifyMsg = action.payload.replace('{app}', data.app).replace('{title}', data.title)
+      chatStore.addMessage({ role: 'assistant', content: notifyMsg })
       chatStore.openChat()
+      // Also send native OS notification (works when minimized)
+      useFeedbackStore.getState().notifyNative('Niromi', notifyMsg)
+      // Alert character expression
+      useCharacterStore.getState().setEmotions({ curiosity: 0.7 })
       break
+    }
 
     case 'run_tool':
       try {
@@ -319,13 +419,75 @@ async function executeVisionAction(
       }
       break
     }
+
+    case 'copy_content':
+      if (data.title) {
+        await window.electronAPI?.clipboardWrite(data.title)
+        useFeedbackStore.getState().addToast({
+          icon: '\uD83D\uDCCB',
+          message: '已复制检测内容到剪贴板',
+          type: 'info',
+        })
+      }
+      break
+
+    case 'run_command': {
+      try {
+        const targetApp = data.app === '__fullscreen__' ? '' : data.app
+        if (targetApp) {
+          await window.electronAPI?.focusWindow(targetApp)
+          await new Promise(r => setTimeout(r, 500))
+        }
+        await window.electronAPI?.sendKeys(action.payload + '{ENTER}')
+        chatStore.addMessage({
+          role: 'assistant',
+          content: `已在 ${targetApp || '活动窗口'} 执行: ${action.payload}`,
+        })
+      } catch {
+        chatStore.addMessage({
+          role: 'assistant',
+          content: '命令执行失败',
+        })
+      }
+      break
+    }
+
+    case 'chain_next': {
+      const queueStore = useCommandQueueStore.getState()
+      const ruleId = action.payload // payload is the ruleId for the queue
+      const nextCmd = queueStore.popNext(ruleId)
+      if (nextCmd) {
+        const targetApp = data.app === '__fullscreen__' ? '' : data.app
+        if (targetApp) {
+          await window.electronAPI?.focusWindow(targetApp)
+          await new Promise(r => setTimeout(r, 500))
+        }
+        await window.electronAPI?.sendKeys(nextCmd + '{ENTER}')
+        chatStore.addMessage({
+          role: 'assistant',
+          content: `队列执行: ${nextCmd}`,
+        })
+      } else if (queueStore.isDone(ruleId)) {
+        chatStore.addMessage({
+          role: 'assistant',
+          content: '所有队列任务已完成！',
+        })
+        chatStore.openChat()
+        useFeedbackStore.getState().addToast({
+          icon: '\u2705',
+          message: '所有任务完成',
+          type: 'success',
+        })
+      }
+      break
+    }
   }
 }
 
 async function generateAIReply(context: string, sensitiveInstruction?: string): Promise<string> {
   const fallback = t('monitor.autoReplyDefault')
   try {
-    const provider = createProvider()
+    const provider = createProvider('monitoring')
     if (!provider) return fallback
 
     let systemPrompt = t('monitor.aiSystemPrompt')

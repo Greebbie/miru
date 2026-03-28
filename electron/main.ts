@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen, clipboard, globalShortcut, Tray, Menu, nativeImage, desktopCapturer, shell, net } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, clipboard, globalShortcut, Tray, Menu, nativeImage, desktopCapturer, shell, net, Notification } from 'electron'
 import https from 'https'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -10,6 +10,7 @@ import { initSTT, transcribeAudio, isSTTInitialized, destroySTT } from './stt'
 import { setupMonitor } from './monitor'
 import { setupAutomation } from './automation'
 import { setupMemoryDb } from './memory-db'
+import { setupOCR, cleanupOCR } from './ocr'
 
 // main.js is loaded as ESM (package.json "type": "module"), so define __filename/__dirname
 const __filename = fileURLToPath(import.meta.url)
@@ -1095,9 +1096,17 @@ app.whenReady().then(async () => {
   createWindow()
   createTray()
 
-  // Setup monitor and automation
+  // Setup monitor, automation, and OCR
   setupMonitor(() => mainWindow)
   setupAutomation()
+  setupOCR()
+
+  // Native notifications
+  ipcMain.handle('native-notify', (_event, title: string, body: string) => {
+    if (Notification.isSupported()) {
+      new Notification({ title, body, silent: false }).show()
+    }
+  })
 
   // Setup memory DB (may fail if better-sqlite3 native module not rebuilt for Electron)
   if (setupMemoryDb) {
@@ -1124,6 +1133,7 @@ app.whenReady().then(async () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
+  cleanupOCR().catch(() => {})
 })
 
 app.on('window-all-closed', () => {

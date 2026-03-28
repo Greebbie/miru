@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { EMOTION_DECAY_FACTOR, IDLE_YAWN_MINUTES, IDLE_SLEEP_MINUTES } from '@/core/constants'
 
 export interface Emotions {
   curiosity: number
@@ -7,7 +8,7 @@ export interface Emotions {
   concern: number
 }
 
-export type AnimationState = 'idle' | 'curious' | 'focused' | 'happy' | 'concerned' | 'sleepy' | 'yawning'
+export type AnimationState = 'idle' | 'curious' | 'focused' | 'happy' | 'concerned' | 'sleepy' | 'yawning' | 'monitoring' | 'alert'
 
 interface CharacterState {
   emotions: Emotions
@@ -18,10 +19,9 @@ interface CharacterState {
   decay: () => void
 }
 
-const DECAY_FACTOR = 0.95
 const IDLE_THRESHOLD = 0.3
-const YAWN_TIMEOUT = 4 * 60 * 1000  // 4 minutes
-const SLEEP_TIMEOUT = 5 * 60 * 1000 // 5 minutes
+const YAWN_TIMEOUT = IDLE_YAWN_MINUTES * 60 * 1000
+const SLEEP_TIMEOUT = IDLE_SLEEP_MINUTES * 60 * 1000
 
 function getAnimationState(emotions: Emotions, lastInteraction: number): AnimationState {
   const now = Date.now()
@@ -70,10 +70,10 @@ export const useCharacterStore = create<CharacterState>((set) => ({
         return { animationState: newAnim }
       }
       const emotions = {
-        curiosity: curiosity * DECAY_FACTOR,
-        focus: focus * DECAY_FACTOR,
-        joy: joy * DECAY_FACTOR,
-        concern: concern * DECAY_FACTOR,
+        curiosity: curiosity * EMOTION_DECAY_FACTOR,
+        focus: focus * EMOTION_DECAY_FACTOR,
+        joy: joy * EMOTION_DECAY_FACTOR,
+        concern: concern * EMOTION_DECAY_FACTOR,
       }
       return {
         emotions,

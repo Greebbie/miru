@@ -4,9 +4,9 @@
 
 # Niromi
 
-**Your AI Desktop Companion**
+**Your AI Desktop Companion & Digital Employee**
 
-A living companion on your screen that sees, remembers, and acts — capable, but knows when to ask.
+A living companion on your screen that sees, remembers, and acts — your visual, zero-barrier desktop agent.
 
 [English](#why-niromi) | [中文](#中文说明)
 
@@ -50,6 +50,10 @@ This isn't about being less capable — Niromi can do everything an autonomous a
 
 **It's yours.** All memory is stored locally in SQLite on your machine. Niromi builds a structured profile of who you are — your name, language, habits, tools you use — and injects a compressed version (~50 tokens) into every conversation. It's not feeding your life into the cloud. It's remembering you the way a friend would.
 
+**Multi-model routing.** Different tasks can use different AI models — use a cheap model for monitoring, a powerful one for chat, a vision-capable one for screen analysis. Each task (chat, vision, monitoring, memory) can be independently configured.
+
+**One-click Quick Actions.** Right-click the character → Quick Actions to instantly set up monitoring presets: "Watch WeChat", "Watch Claude Code", "Watch Web Page" — no technical configuration needed.
+
 **It watches while you sleep.** You can delegate tasks when you step away:
 
 - *"I'm going to bed. Watch this code run — screenshot the result when done."*
@@ -75,7 +79,7 @@ Niromi can operate your computer through tool calling:
 - **Shell** — execute commands (with your confirmation)
 - **Clipboard** — read and write
 - **System** — disk, battery, network, processes
-- **Web search** — DuckDuckGo integration
+- **Web search** — Bing integration (China-compatible)
 - **Screen** — screenshot + vision analysis
 
 Every action goes through a permission system:
@@ -85,15 +89,15 @@ Every action goes through a permission system:
 
 ### It Sees Your Screen
 
-Layered vision — pay only for what you need:
+Layered vision with OCR-first strategy — pay only when you need AI:
 
 | Layer | What | Cost |
 |-------|------|------|
 | **0** | Window title via OS API | Free |
-| **1** | Compressed screenshot (640x360) sent to AI | ~200 tokens |
-| **2** | Active window capture sent to AI | ~400 tokens |
+| **1** | OCR text extraction (Tesseract.js, local) | Free |
+| **2** | Compressed screenshot sent to AI Vision | ~200 tokens |
 
-Niromi tells you the cost before using vision. You can always describe what you see in text instead.
+Three extraction strategies auto-matched by window type: **chat** (WeChat, Discord), **terminal** (cmd, PowerShell), **generic** (browser, any app). Monitoring polls conservatively (default: every 5 minutes).
 
 ### It Remembers You
 
@@ -179,7 +183,8 @@ Typical interaction: **~1000 tokens total (~$0.003 on Claude Sonnet)**
 Electron Main Process (thin OS shell)
 ├── Window management (transparent, always-on-top, click-through)
 ├── IPC handlers (files, shell, clipboard, system info)
-├── Vision (LLM-based screenshot analysis)
+├── Vision (OCR → LLM Vision layered extraction)
+├── OCR (Tesseract.js for zero-cost text extraction)
 ├── Memory DB (better-sqlite3 with FTS5 full-text search)
 ├── Monitor (active window polling + change detection)
 └── Automation (SendKeys, window focusing)
@@ -188,11 +193,13 @@ React Renderer
 ├── Character — continuous emotion system + CSS animations
 ├── Chat — streaming messages + tool call status cards
 ├── Admin Panel — tool permissions, monitor rules, auto-reply, audit logs
-├── AI Core — 7-provider abstraction + SSE streaming
+├── AI Core — 7-provider abstraction + SSE streaming + multi-model routing
 ├── Tools — registry with permission checks + audit logging
-├── Parser — local regex engine (zero-token command execution)
+├── Parser — local regex engine (60+ patterns, fuzzy matching)
 ├── Memory — 3-layer store + FTS5 fact search + knowledge extraction
-└── Skills — extensible plugin registry
+├── Skills — extensible plugin registry + watch presets
+├── Feedback — ActionToast + StatusPill (real-time visual feedback)
+└── QuickActions — one-click scenario setup panel
 ```
 
 ### Design Principles
@@ -255,17 +262,21 @@ Skills are tools you teach Niromi. It's good at using them, but it lets you pick
 
 - [x] Desktop character with continuous emotion system
 - [x] Chat with streaming AI responses
-- [x] File operations + system tools (10+ tools)
+- [x] File operations + system tools (15+ tools)
 - [x] Multi-provider AI support (7 providers)
-- [x] Local command parser (zero-token operations)
+- [x] Multi-model routing (different AI per task)
+- [x] Local command parser (zero-token, 60+ patterns, fuzzy matching)
 - [x] Three-layer memory with SQLite + FTS5 full-text search
-- [x] Vision system (LLM-based screenshot analysis)
+- [x] Vision system (OCR → LLM Vision, 3 extraction strategies)
 - [x] Admin panel (tool permissions, window monitoring, auto-reply, audit logs)
-- [ ] Voice interaction (STT / TTS)
-- [ ] Skill store + community skills
+- [x] QuickActions panel (one-click scenario setup)
+- [x] Watch presets (Claude Code, Web Page, Build/Download)
+- [x] Voice interaction (Whisper STT + Web Speech TTS)
+- [x] 125 unit tests
+- [ ] Skill marketplace + community skills
 - [ ] Character skins + community character packs
 - [ ] MCP protocol support
-- [ ] Workflow / routine editor
+- [ ] Task scheduling (cron-style)
 - [ ] Cloud memory sync (Pro)
 
 ---
@@ -292,9 +303,9 @@ MIT
 
 ## 中文说明
 
-Niromi（みる）是一个桌面 AI 伙伴。有能力，也懂分寸。
+Niromi（ニロミ）是你的桌面 AI 伙伴和数字员工。有能力，也懂分寸。
 
-它住在你屏幕角落，看得见、记得住、能动手 — 该做的直接做，该问的先问你。
+它住在你屏幕角落，看得见、记得住、能动手 — 该做的直接做，该问的先问你。你可以用 Skill 教会它做任何事。
 
 ### 跟自主 Agent 有什么不同？
 
@@ -307,13 +318,19 @@ Niromi（みる）是一个桌面 AI 伙伴。有能力，也懂分寸。
 
 像一个特别靠谱的帮手 — 有你家钥匙，但不会趁你不在翻你抽屉。
 
-### 你睡觉它值班
+### 五大核心场景
 
-"帮我盯着这个代码跑完，微信有人找就说我睡了。"
+1. **微信值守** — 帮你盯微信，按规则自动回复，敏感内容自动屏蔽
+2. **开发看守** — 盯 Claude Code / 终端 / 浏览器，完成/报错时通知你
+3. **快速命令** — "打开 Chrome"、"去 GitHub"、"计算 123*456"，零 token 即说即做
+4. **Skill 生态** — 教会 Niromi 新能力（量化盯盘、自动化办公等）
+5. **可视化小白化** — QuickActions 一键配置，角色情绪跟随场景变化
 
-Niromi 完全有能力在你不在的时候管理电脑。但它需要你先交代清楚 — 像交接工作一样，告诉它遇到什么情况做什么。没交代到的，暂停等你回来。
+右键角色 → "快捷操作" 即可一键开启。监控默认 5 分钟查一次，token 极省。
 
-**有能力自主，但选择听你的。**
+### 多模型路由
+
+不同任务可用不同 AI — 对话用强模型，监控用便宜模型，视觉用支持图的模型。设置 → AI → 任务路由。
 
 ### 省钱
 
@@ -335,12 +352,14 @@ npm run dev
 
 Claude（推荐）| OpenAI | DeepSeek（便宜好用）| Ollama（免费本地）| vLLM | 通义千问 | Minimax
 
+每种任务可独立配置不同模型 — 对话、视觉、监控、记忆各用最合适的。
+
 ---
 
 <div align="center">
 
 **Niromi sees you. Niromi helps you. Niromi remembers you.**
 
-みる — *to see, to watch, to look after*
+ニロミ — *Niromi*
 
 </div>

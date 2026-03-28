@@ -1,6 +1,18 @@
 import { create } from 'zustand'
+import { CONFIG_PERSIST_DEBOUNCE_MS } from '@/core/constants'
 
 export type AIProviderType = 'claude' | 'openai' | 'deepseek' | 'ollama' | 'vllm' | 'qwen' | 'minimax'
+
+export type AITask = 'chat' | 'vision' | 'monitoring' | 'factExtraction'
+
+/** Per-task model override. Empty/missing fields inherit from main config. */
+export interface TaskRouteConfig {
+  provider?: AIProviderType
+  model?: string
+  apiKey?: string
+  baseUrl?: string
+  groupId?: string
+}
 
 interface ConfigData {
   provider: AIProviderType
@@ -22,6 +34,8 @@ interface ConfigData {
   tokenBudget: 'minimal' | 'balanced' | 'smart'
   sttModel: string
   sttLanguage: 'auto' | 'zh' | 'en'
+  /** Per-task model routing overrides */
+  modelRouting: Partial<Record<AITask, TaskRouteConfig>>
 }
 
 interface ConfigState extends ConfigData {
@@ -47,6 +61,8 @@ interface ConfigState extends ConfigData {
   setTokenBudget: (budget: 'minimal' | 'balanced' | 'smart') => void
   setSttModel: (model: string) => void
   setSttLanguage: (lang: 'auto' | 'zh' | 'en') => void
+  setModelRouting: (routing: Partial<Record<AITask, TaskRouteConfig>>) => void
+  setTaskRoute: (task: AITask, config: TaskRouteConfig | undefined) => void
   updateConfig: (partial: Partial<ConfigState>) => void
 }
 
@@ -71,12 +87,22 @@ function extractData(state: ConfigState): ConfigData {
     tokenBudget: state.tokenBudget,
     sttModel: state.sttModel,
     sttLanguage: state.sttLanguage,
+    modelRouting: state.modelRouting,
   }
 }
 
+let persistTimer: ReturnType<typeof setTimeout> | null = null
+
 function persistConfig() {
-  const data = extractData(useConfigStore.getState())
-  window.electronAPI?.storeSet('config', data)
+  // Don't persist while still loading (prevents overwriting saved config with defaults)
+  if (useConfigStore.getState().isLoading) return
+  // Debounce: coalesce rapid changes into one write
+  if (persistTimer !== null) clearTimeout(persistTimer)
+  persistTimer = setTimeout(() => {
+    persistTimer = null
+    const data = extractData(useConfigStore.getState())
+    window.electronAPI?.storeSet('config', data)
+  }, CONFIG_PERSIST_DEBOUNCE_MS)
 }
 
 export const useConfigStore = create<ConfigState>((set) => ({
@@ -99,6 +125,7 @@ export const useConfigStore = create<ConfigState>((set) => ({
   tokenBudget: 'balanced',
   sttModel: 'Xenova/whisper-tiny',
   sttLanguage: 'auto',
+  modelRouting: {},
   isLoading: true,
 
   init: async () => {
@@ -137,5 +164,18 @@ export const useConfigStore = create<ConfigState>((set) => ({
   setTokenBudget: (tokenBudget) => { set({ tokenBudget }); persistConfig() },
   setSttModel: (sttModel) => { set({ sttModel }); persistConfig() },
   setSttLanguage: (sttLanguage) => { set({ sttLanguage }); persistConfig() },
+  setModelRouting: (modelRouting) => { set({ modelRouting }); persistConfig() },
+  setTaskRoute: (task, config) => {
+    set((state) => {
+      const routing = { ...state.modelRouting }
+      if (config) {
+        routing[task] = config
+      } else {
+        delete routing[task]
+      }
+      return { modelRouting: routing }
+    })
+    persistConfig()
+  },
   updateConfig: (partial) => { set(partial); persistConfig() },
 }))

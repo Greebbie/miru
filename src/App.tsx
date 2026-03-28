@@ -15,8 +15,12 @@ import SettingsPanel from '@/components/Settings/SettingsPanel'
 import CommandPalette from '@/components/CommandPalette/CommandPalette'
 import ContextMenu from '@/components/ContextMenu/ContextMenu'
 import AdminPanel from '@/components/Admin/AdminPanel'
+import QuickActionsPanel from '@/components/QuickActions/QuickActionsPanel'
+import ActionToast from '@/components/Feedback/ActionToast'
+import StatusPillBar from '@/components/Feedback/StatusPill'
 import { useMonitor } from '@/hooks/useMonitor'
 import { useScreenTime } from '@/hooks/useScreenTime'
+import { initCommandQueues } from '@/stores/commandQueueStore'
 
 // Register skills once on module load
 registerBuiltinSkills()
@@ -29,7 +33,29 @@ export default function App() {
   const { isAdminOpen, setAdminOpen } = useAdminStore()
   const [showSettings, setShowSettings] = useState(false)
   const [showCommandPalette, setShowCommandPalette] = useState(false)
+  const [showQuickActions, setShowQuickActions] = useState(false)
   const [isCompact, setIsCompact] = useState(false)
+
+  // Close all overlay panels (mutual exclusivity)
+  const closeAllPanels = useCallback(() => {
+    setShowSettings(false)
+    setShowCommandPalette(false)
+    setShowQuickActions(false)
+    setAdminOpen(false)
+  }, [setAdminOpen])
+
+  // Escape key closes the topmost panel
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (showCommandPalette) { setShowCommandPalette(false); return }
+      if (showQuickActions) { setShowQuickActions(false); return }
+      if (isAdminOpen) { setAdminOpen(false); return }
+      if (showSettings) { setShowSettings(false); return }
+    }
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [showCommandPalette, showQuickActions, isAdminOpen, showSettings, setAdminOpen])
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [showHint, setShowHint] = useState(() => !localStorage.getItem(HINT_STORAGE_KEY))
   const { t } = useI18n()
@@ -45,6 +71,7 @@ export default function App() {
     useAdminStore.getState().init()
     memoryStore.init()
     useCostStore.getState().initCost()
+    initCommandQueues()
   }, [])
 
   // Transparent window with transparent:true handles click-through natively —
@@ -136,6 +163,16 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Quick Actions panel */}
+      <AnimatePresence>
+        {showQuickActions && !isCompact && (
+          <QuickActionsPanel
+            onClose={() => setShowQuickActions(false)}
+            onOpenAdmin={() => startTransition(() => setAdminOpen(true))}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Command palette */}
       <AnimatePresence>
         {showCommandPalette && (
@@ -150,10 +187,11 @@ export default function App() {
             x={contextMenu.x}
             y={contextMenu.y}
             onClose={() => setContextMenu(null)}
-            onOpenSettings={() => startTransition(() => setShowSettings(true))}
+            onOpenSettings={() => { closeAllPanels(); startTransition(() => setShowSettings(true)) }}
             onToggleCompact={toggleCompact}
-            onOpenCommandPalette={() => setShowCommandPalette(true)}
-            onOpenAdmin={() => startTransition(() => setAdminOpen(true))}
+            onOpenCommandPalette={() => { closeAllPanels(); setShowCommandPalette(true) }}
+            onOpenAdmin={() => { closeAllPanels(); startTransition(() => setAdminOpen(true)) }}
+            onOpenQuickActions={() => { closeAllPanels(); setShowQuickActions(true) }}
           />
         )}
       </AnimatePresence>
@@ -167,12 +205,23 @@ export default function App() {
         </div>
       )}
 
+      {/* Action toasts above character */}
+      {!isCompact && <ActionToast />}
+
       {/* Character at bottom — double click toggles compact, right click opens menu */}
       <div onDoubleClick={toggleCompact} onContextMenu={handleContextMenu} onClick={handleCharacterClick}>
         <ErrorBoundary>
           <Character />
         </ErrorBoundary>
       </div>
+
+      {/* Status pills below character */}
+      {!isCompact && (
+        <StatusPillBar
+          onOpenAdmin={() => startTransition(() => setAdminOpen(true))}
+          onOpenQuickActions={() => setShowQuickActions(true)}
+        />
+      )}
 
       {/* First-use hint below character */}
       <AnimatePresence>

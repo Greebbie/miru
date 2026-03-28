@@ -108,6 +108,12 @@ export function createMockElectronAPI(overrides?: Partial<Record<string, any>>) 
     sendKeys: vi.fn().mockResolvedValue(undefined),
     focusWindow: vi.fn().mockResolvedValue(undefined),
 
+    // OCR
+    ocrImage: vi.fn().mockResolvedValue(''),
+
+    // Native notifications
+    nativeNotify: vi.fn().mockResolvedValue(undefined),
+
     // Memory DB
     memoryUpsertIdentity: vi.fn().mockResolvedValue(undefined),
     memoryGetIdentity: vi.fn().mockResolvedValue({}),
@@ -126,11 +132,4 @@ export function createMockElectronAPI(overrides?: Partial<Record<string, any>>) 
     ...overrides,
   }
   return api
-}
-
-export function createMockSTTResult(overrides?: Partial<{ text: string; error?: string }>) {
-  return {
-    text: 'test',
-    ...overrides,
-  }
 }

@@ -1,4 +1,5 @@
 import type { ToolDef } from '@/core/ai/provider'
+import { useFeedbackStore } from '@/stores/feedbackStore'
 
 export interface ToolDefinition {
   name: string
@@ -74,6 +75,13 @@ class ToolRegistry {
         resultSuccess: result.success,
         resultSummary: result.summary.slice(0, 200),
         durationMs,
+      })
+
+      // Visual feedback toast
+      useFeedbackStore.getState().addToast({
+        icon: result.success ? '\u2705' : '\u274C',
+        message: result.summary.slice(0, 60),
+        type: result.success ? 'success' : 'error',
       })
 
       return result

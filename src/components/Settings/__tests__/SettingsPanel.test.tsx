@@ -59,6 +59,7 @@ describe('SettingsPanel', () => {
       tokenBudget: 'balanced',
       sttModel: 'Xenova/whisper-tiny',
       sttLanguage: 'auto',
+      modelRouting: {},
     })
   })
 
@@ -74,7 +75,7 @@ describe('SettingsPanel', () => {
     render(<SettingsPanel onClose={onClose} />)
     // AI tab shows provider list and test button
     expect(screen.getByText('settings.ai.service')).toBeInTheDocument()
-    expect(screen.getByText('Claude')).toBeInTheDocument()
+    expect(screen.getAllByText('Claude').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('settings.ai.test')).toBeInTheDocument()
   })
 

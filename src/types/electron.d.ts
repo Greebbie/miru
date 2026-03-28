@@ -100,6 +100,12 @@ export interface ElectronAPI {
   sendKeys: (keys: string) => Promise<void>
   focusWindow: (processName: string) => Promise<void>
 
+  // OCR
+  ocrImage: (base64: string) => Promise<string>
+
+  // Native notifications
+  nativeNotify: (title: string, body: string) => Promise<void>
+
   // Memory DB
   memoryUpsertIdentity: (key: string, value: string) => Promise<void>
   memoryGetIdentity: () => Promise<Record<string, string>>

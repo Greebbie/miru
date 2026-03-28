@@ -17,11 +17,12 @@ export default function InputBar() {
 
   const pendingPrompt = useChatStore((s) => s.pendingPrompt)
   useEffect(() => {
-    if (pendingPrompt) {
-      sendMessage(pendingPrompt)
-      useChatStore.getState().setPendingPrompt(null)
-    }
-  }, [pendingPrompt, sendMessage])
+    if (!pendingPrompt) return
+    // Clear immediately to prevent re-firing on sendMessage reference change
+    const prompt = pendingPrompt
+    useChatStore.getState().setPendingPrompt(null)
+    sendMessage(prompt)
+  }, [pendingPrompt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleVoiceResult = useCallback(
     (text: string) => {

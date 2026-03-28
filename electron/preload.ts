@@ -169,6 +169,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   focusWindow: (processName: string) =>
     ipcRenderer.invoke('focus-window', processName) as Promise<void>,
 
+  // OCR
+  ocrImage: (base64: string) =>
+    ipcRenderer.invoke('ocr-image', base64) as Promise<string>,
+
+  // Native notifications
+  nativeNotify: (title: string, body: string) =>
+    ipcRenderer.invoke('native-notify', title, body) as Promise<void>,
+
   // Memory DB
   memoryUpsertIdentity: (key: string, value: string) =>
     ipcRenderer.invoke('memory-upsert-identity', key, value),

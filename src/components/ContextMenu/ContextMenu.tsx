@@ -11,10 +11,11 @@ interface ContextMenuProps {
   onToggleCompact: () => void
   onOpenCommandPalette: () => void
   onOpenAdmin: () => void
+  onOpenQuickActions: () => void
 }
 
 export default function ContextMenu({
-  x, y, onClose, onOpenSettings, onToggleCompact, onOpenCommandPalette, onOpenAdmin,
+  x, y, onClose, onOpenSettings, onToggleCompact, onOpenCommandPalette, onOpenAdmin, onOpenQuickActions,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const { t } = useI18n()
@@ -25,15 +26,16 @@ export default function ContextMenu({
     { label: t('ctx.todaySummary'), prompt: t('ctx.todaySummary') },
   ]
 
-  // Clamp position to window bounds
+  // Clamp position to window bounds (after first render measures size)
   useEffect(() => {
     const el = menuRef.current
     if (!el) return
+    // Force layout to get accurate dimensions
     const rect = el.getBoundingClientRect()
-    const maxX = window.innerWidth - rect.width - 8
-    const maxY = window.innerHeight - rect.height - 8
-    if (x > maxX) el.style.left = `${maxX}px`
-    if (y > maxY) el.style.top = `${maxY}px`
+    const clampedX = Math.min(x, window.innerWidth - rect.width - 8)
+    const clampedY = Math.min(y, window.innerHeight - rect.height - 8)
+    el.style.left = `${Math.max(4, clampedX)}px`
+    el.style.top = `${Math.max(4, clampedY)}px`
   }, [x, y])
 
   // Close on Esc or click outside
@@ -90,6 +92,13 @@ export default function ContextMenu({
 
       {/* Separator */}
       <div className="my-1 border-t border-white/10" />
+
+      <button
+        onClick={() => { onOpenQuickActions(); onClose() }}
+        className="w-full px-3 py-1.5 text-left text-xs text-white/80 hover:bg-white/10 transition-colors"
+      >
+        {t('qa.title')}
+      </button>
 
       <button
         onClick={() => { onOpenCommandPalette(); onClose() }}

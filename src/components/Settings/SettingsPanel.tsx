@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useConfigStore, type AIProviderType } from '@/stores/configStore'
+import { useConfigStore, type AIProviderType, type AITask, type TaskRouteConfig } from '@/stores/configStore'
 import { testConnection } from '@/core/ai/testConnection'
 import { humanizeError } from '@/core/errors/humanize'
 import { isVisionCapable } from '@/core/ai/createProvider'
@@ -101,7 +101,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                 {PROVIDERS.map((p) => (
                   <button
                     key={p.id}
-                    onClick={() => config.setProvider(p.id)}
+                    onClick={() => { config.setProvider(p.id); setTestResult(null) }}
                     className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all ${
                       config.provider === p.id
                         ? 'bg-blue-500/30 text-white'
@@ -173,6 +173,46 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                     {t(`settings.ai.budget.${budget}`)}
                   </button>
                 ))}
+              </div>
+
+              {/* Task Routing */}
+              <Label>{t('settings.ai.routing')}</Label>
+              <div className="space-y-1.5">
+                {(['chat', 'vision', 'monitoring'] as AITask[]).map((task) => {
+                  const route = config.modelRouting[task]
+                  const isOverridden = !!route?.provider
+                  return (
+                    <div key={task} className="flex items-center gap-2">
+                      <span className="text-[10px] text-white/50 w-14 shrink-0">{t(`settings.ai.task.${task}`)}</span>
+                      <select
+                        value={route?.provider || ''}
+                        onChange={(e) => {
+                          const val = e.target.value as AIProviderType | ''
+                          if (!val) {
+                            config.setTaskRoute(task, undefined)
+                          } else {
+                            config.setTaskRoute(task, { ...route, provider: val })
+                          }
+                        }}
+                        className="flex-1 bg-white/10 text-white text-[10px] rounded px-1.5 py-1 border border-white/10"
+                      >
+                        <option value="">{t('settings.ai.routing.inherit')}</option>
+                        {PROVIDERS.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      {isOverridden && (
+                        <input
+                          value={route?.apiKey || ''}
+                          onChange={(e) => config.setTaskRoute(task, { ...route, apiKey: e.target.value })}
+                          placeholder="API Key"
+                          type="password"
+                          className="w-20 bg-white/10 text-white text-[10px] rounded px-1.5 py-1 border border-white/10 placeholder:text-white/20"
+                        />
+                      )}
+                    </div>
+                  )
+                })}
               </div>
 
               {/* Test Connection */}

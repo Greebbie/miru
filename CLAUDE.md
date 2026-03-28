@@ -1,12 +1,22 @@
-# Niromi (みる) — AI Desktop Companion
+# Niromi (ニロミ) — AI Desktop Companion
 
 ## 项目定位
 
-Niromi 是一个桌面 AI 伙伴。住在屏幕角落，记得住你的习惯，能帮你操作电脑，会跟你说话。**不是开发者工具，是所有人的伙伴。**
+Niromi 是你的桌面 AI 伙伴和数字员工。住在屏幕角落，记得住你的习惯，能帮你操作电脑，会跟你说话。**不是开发者工具，是所有人的数字助手。**
 
 > "OpenClaw 的能力，桌宠的体验，普通人的门槛。"
 
-双击安装 + 填 API key，3 分钟能用。
+双击安装 + 填 API key，3 分钟能用。你可以用 Skill 教会它做任何事，它就是你的可视化数字员工。
+
+## 五大核心场景
+
+开发时必须围绕这 5 个场景设计所有功能：
+
+1. **微信值守** — 帮用户盯着微信，有消息时按规则自动回复，敏感内容自动屏蔽。权限控制严格：用户预设规则，Niromi 执行，绝不自作主张。
+2. **开发看守** — 盯着 Claude Code 或任意终端/浏览器，检测完成/报错/等待输入，通知用户或按队列执行下一步。本质是通用的"看+判断+操作"能力。
+3. **快速命令** — "打开 Chrome"、"去 GitHub"、"计算 123*456" — 零 token 本地解析，模糊匹配容错，即说即做。
+4. **Skill 生态** — 接入 Skill Hub，用户教会 Niromi 新能力（量化盯盘、自动化办公等）。兼容 OpenClaw SKILL.md 格式，借生态但更可视化。
+5. **可视化 + 小白化** — 相比 OpenClaw 技术层面，Niromi 一定是可视化的、零门槛的。QuickActions 一键配置，StatusPill 实时状态，ActionToast 即时反馈，角色情绪跟随场景变化。
 
 ## Niromi vs OpenClaw — 核心区别
 
@@ -67,13 +77,16 @@ Niromi 可以被"委托"在用户不在时管理电脑，但**核心原则不变
 - Niromi：用户指定使用，展示计划等确认后才执行
 - Skill 是"你教它用的工具"，不是"它自己发现的能力"
 
-### 分层视觉（0-2 级，LLM Vision）
+### 分层视觉（0-2 级，OCR → LLM Vision）
 
 - **Layer 0**: 零视觉 — 读窗口标题（Accessibility API），0 token
-- **Layer 1**: 轻视觉 — 压缩截图 640x360 发 LLM Vision，~200 tokens，用户说"看一下"才触发
-- **Layer 2**: 窗口视觉 — 截指定窗口发 LLM Vision，~400 tokens
+- **Layer 1**: OCR 优先 — Tesseract.js 本地提取文字，0 token（中文+英文）
+- **Layer 2**: LLM Vision — 压缩截图 640x360 发 LLM Vision，~200 tokens（仅 OCR 不够时降级）
 
-费用透明：视觉操作前告知用户 token 消耗，用户可选择文字描述代替截图。需要支持视觉的 AI 模型（Claude、OpenAI 等）。
+**监控轮询默认保守**：5 分钟一次（300s），可在预设或规则中调整。Claude Code 预设 2 分钟，编译预设 1 分钟。
+**3 种提取策略**自动匹配窗口类型：聊天类 / 终端类 / 通用类。
+
+费用透明：视觉操作前告知用户 token 消耗，用户可选择文字描述代替截图。
 
 ### 价格感知内建
 
@@ -89,11 +102,15 @@ Niromi 可以被"委托"在用户不在时管理电脑，但**核心原则不变
 - **better-sqlite3** 本地记忆 (FTS5 全文搜索)
 - **LLM Vision** 视觉分析 (截图 → AI 模型)
 - AI: Claude / OpenAI / DeepSeek / Ollama / vLLM / Qwen / Minimax (统一 AIProvider 接口)
+- **Tesseract.js** OCR (零 LLM 成本文字提取，视觉管道降级方案)
+- **多模型路由**: 不同任务可用不同 LLM（对话/视觉/监控/记忆各自独立配置）
 
 ## 架构原则
 
 - **TypeScript-first**: Electron 主进程只做 OS 原生 API，业务逻辑全 TS
 - **Token 效率至上**: 简单命令本地正则解析（零 token），system prompt < 200 tokens，tool 描述 < 15 words
+- **多模型路由**: 每种任务（chat/vision/monitoring/factExtraction）可独立配置 provider + model，便宜的活用便宜的模型
+- **分层视觉**: OCR 优先（零 token）→ LLM Vision 降级。3 种提取策略自动匹配窗口类型（聊天/终端/通用）
 - **角色要"活"**: 情绪用 float 数值 + 衰减，不用 enum 硬切换。呼吸用 CSS，眼球跟踪用 transform
 - **用户永远有控制权**: 低风险直接做，中风险展示计划确认，高风险明确警告
 - **错误要人性化**: 永远不显示技术 error message，翻译为 Niromi 的话
@@ -105,13 +122,15 @@ Niromi 可以被"委托"在用户不在时管理电脑，但**核心原则不变
 - `src/core/tools/` — Tool 注册表 + 权限检查 + 审计日志
 - `src/core/parser/` — 本地命令解析器 (零 token 操作)
 - `src/core/memory/` — SQLite 三层记忆 (identity/preferences/episodes) + FTS5 事实搜索
-- `src/core/skills/` — Skill 注册/发现/执行 (兼容 OpenClaw SKILL.md)
-- `src/components/Character/` — 角色渲染 + 情绪系统
+- `src/core/skills/` — Skill 注册/发现/执行 (兼容 OpenClaw SKILL.md) + 看守预设 (watch-presets)
+- `src/components/Character/` — 角色渲染 + 情绪系统 (monitoring/alert 新表情)
 - `src/components/Chat/` — 聊天 UI + 确认弹窗 + 费用显示 (CostBadge)
+- `src/components/Feedback/` — ActionToast (即时反馈) + StatusPill (持久状态指示)
+- `src/components/QuickActions/` — 快捷操作面板 (5 大场景一键配置)
 - `src/components/Admin/` — 管理面板 (工具权限、监控规则、自动回复、日志)
 - `src/hooks/` — useAI (AI 交互), useMonitor (监控值守), useVoiceInput (STT)
 - `src/core/tts.ts` — TTS 语音合成 (Web Speech API)
-- `src/stores/` — Zustand stores (character, chat, config, admin, cost)
+- `src/stores/` — Zustand stores (character, chat, config, admin, cost, feedback, commandQueue, skillConfig, marketplace)
 
 ## 开发规范
 
@@ -179,3 +198,33 @@ interface ToolDefinition {
 - Round 7: 管理后台 (权限 + 监控规则 + 自动回复 + 审计日志)
 - Round 8: 委托值守激活 + 费用显示 + TTS/STT
 - Round 9: 代码清理 + UX 闭环 + 文档更新
+- Round 10: 视觉 UX 基础 (ActionToast + StatusPill + QuickActions + Onboarding 场景)
+- Round 11: 快速命令增强 (模糊匹配 + 音量/锁屏/计算器 + 新增 app/website)
+- Round 12: 通用视觉管道 (OCR 降级 + 3 种提取策略 + 条件-动作引擎 + 命令队列)
+- Round 13: 看守预设 (Claude Code / 网页 / 编译 一键配置) + 多模型路由
+- Round 14: Bug 修复 (race conditions + memory leaks + panel 互斥 + Escape + persist debounce)
+- Round 15: 125 个测试覆盖 + CLAUDE.md 愿景更新
+- Round 16: Vision 默认值保守化 (5min 轮询) + 常量提取 + README 专业化
+
+## 关键常量 (src/core/constants.ts)
+
+```
+VISION_POLL_MIN_MS     = 60s     // 视觉轮询最小间隔
+VISION_POLL_DEFAULT_MS = 300s    // 默认 5 分钟
+PRESET: claudeCode     = 120s    // Claude Code 看守
+PRESET: webWatch       = 300s    // 网页监控
+PRESET: buildWatch     = 60s     // 编译监控
+MAX_TOOL_ROUNDS        = 5       // 工具调用最大轮数
+MAX_PERSISTED_MESSAGES = 50      // 持久化消息上限
+CONFIG_PERSIST_DEBOUNCE = 300ms  // 配置保存防抖
+```
+
+## 下次开发必读
+
+1. **不存 API key 到代码里** — 用户在运行时设置中配置，持久化到 Electron store
+2. **多模型路由** — configStore.modelRouting 支持每种任务独立配置 provider/model/key
+3. **Vision 成本控制** — 默认 5 分钟轮询，OCR 优先于 LLM Vision。常量在 constants.ts
+4. **Panel 互斥** — App.tsx 的 closeAllPanels() 确保同时只打开一个 overlay
+5. **Memory 是 SQLite** — 不是 MD 文件。FTS5 全文搜索，3 层结构化记忆 < 200 tokens 注入
+6. **125 个测试** — npm test 应全过。新功能需写测试
+7. **Electron native 模块** — better-sqlite3 需要 `npx electron-rebuild -f -w better-sqlite3`

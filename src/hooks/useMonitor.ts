@@ -202,6 +202,8 @@ export function useMonitor() {
       const hasEnabled = admin.monitorRules.some((r) => r.enabled) || admin.autoReplyRules.some((r) => r.enabled)
 
       if (hasEnabled && !isRunningRef.current) {
+        // Remove any stale listener before adding new one
+        window.electronAPI?.offWindowChanged?.()
         window.electronAPI?.monitorStart(2000)
         window.electronAPI?.onWindowChanged(handleWindowChanged)
         isRunningRef.current = true

@@ -47,7 +47,7 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['better-sqlite3', 'electron-store', 'worker_threads', '@huggingface/transformers'],
+              external: ['better-sqlite3', 'electron-store', 'worker_threads', '@huggingface/transformers', 'tesseract.js'],
             },
           },
         },
